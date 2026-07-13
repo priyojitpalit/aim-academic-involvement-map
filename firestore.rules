@@ -1,0 +1,575 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function verified() {
+      return signedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function authEmail() {
+      return request.auth.token.email;
+    }
+
+    function currentUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function hasProfile() {
+      return verified() && exists(currentUserPath());
+    }
+
+    function currentUser() {
+      return get(currentUserPath()).data;
+    }
+
+    function activeApproved() {
+      return hasProfile()
+        && currentUser().approved == true
+        && currentUser().status == 'active'
+        && currentUser().role in ['student', 'faculty', 'admin'];
+    }
+
+    function isAdmin() {
+      return activeApproved() && currentUser().role == 'admin';
+    }
+
+    function isStudent() {
+      return activeApproved() && currentUser().role == 'student';
+    }
+
+    function isFaculty() {
+      return activeApproved() && currentUser().role == 'faculty';
+    }
+
+    function appSettings() {
+      return get(/databases/$(database)/documents/settings/app).data;
+    }
+
+    function isOfficialStudentEmail() {
+      return verified() && authEmail().matches('.*@email[.]shc[.]edu$');
+    }
+
+    function isOfficialFacultyEmail() {
+      return verified()
+        && authEmail().matches('.*@shc[.]edu$')
+        && !authEmail().matches('.*@email[.]shc[.]edu$');
+    }
+
+    function approvalPath() {
+      return /databases/$(database)/documents/emailApprovals/$(authEmail());
+    }
+
+    function hasActiveEmailApproval() {
+      return verified()
+        && exists(approvalPath())
+        && get(approvalPath()).data.active == true
+        && get(approvalPath()).data.role in ['student', 'faculty', 'admin'];
+    }
+
+    function userExists(uid) {
+      return uid is string
+        && uid.size() > 0
+        && exists(/databases/$(database)/documents/users/$(uid));
+    }
+
+    function userData(uid) {
+      return get(/databases/$(database)/documents/users/$(uid)).data;
+    }
+
+    function isActiveUser(uid) {
+      return userExists(uid)
+        && userData(uid).approved == true
+        && userData(uid).status == 'active'
+        && userData(uid).role in ['student', 'faculty', 'admin'];
+    }
+
+    function isActiveRole(uid, expectedRole) {
+      return isActiveUser(uid)
+        && userData(uid).role == expectedRole;
+    }
+
+    function relationshipPath(studentUid, facultyUid) {
+      return /databases/$(database)/documents/relationships/$(studentUid + '__' + facultyUid);
+    }
+
+    function relationshipExists(studentUid, facultyUid) {
+      return studentUid is string
+        && facultyUid is string
+        && studentUid.size() > 0
+        && facultyUid.size() > 0
+        && exists(relationshipPath(studentUid, facultyUid));
+    }
+
+    function hasActiveRelationship(studentUid, facultyUid) {
+      return relationshipExists(studentUid, facultyUid)
+        && get(relationshipPath(studentUid, facultyUid)).data.status == 'active';
+    }
+
+    function validNotificationPreferences(value) {
+      return value is map
+        && value.keys().hasAll([
+          'allMuted', 'planUpdates', 'comments',
+          'relationships', 'documents', 'administrative'
+        ])
+        && value.keys().hasOnly([
+          'allMuted', 'planUpdates', 'comments',
+          'relationships', 'documents', 'administrative'
+        ])
+        && value.allMuted is bool
+        && value.planUpdates is bool
+        && value.comments is bool
+        && value.relationships is bool
+        && value.documents is bool
+        && value.administrative is bool;
+    }
+
+    function validStage(stage) {
+      return stage is map
+        && stage.keys().hasAll([
+          'academic', 'involvement', 'highImpact', 'career',
+          'summerPlan', 'careerExperience', 'academicProgress', 'serviceTravel',
+          'destination', 'preparation'
+        ])
+        && stage.keys().hasOnly([
+          'academic', 'involvement', 'highImpact', 'career',
+          'summerPlan', 'careerExperience', 'academicProgress', 'serviceTravel',
+          'destination', 'preparation'
+        ])
+        && stage.academic is string && stage.academic.size() <= 4000
+        && stage.involvement is string && stage.involvement.size() <= 4000
+        && stage.highImpact is string && stage.highImpact.size() <= 4000
+        && stage.career is string && stage.career.size() <= 4000
+        && stage.summerPlan is string && stage.summerPlan.size() <= 4000
+        && stage.careerExperience is string && stage.careerExperience.size() <= 4000
+        && stage.academicProgress is string && stage.academicProgress.size() <= 4000
+        && stage.serviceTravel is string && stage.serviceTravel.size() <= 4000
+        && stage.destination is string && stage.destination.size() <= 4000
+        && stage.preparation is string && stage.preparation.size() <= 4000;
+    }
+
+    function validStages(stages) {
+      return stages is map
+        && stages.keys().hasAll([
+          'freshman', 'summer1', 'sophomore', 'summer2',
+          'junior', 'summer3', 'senior', 'graduation'
+        ])
+        && stages.keys().hasOnly([
+          'freshman', 'summer1', 'sophomore', 'summer2',
+          'junior', 'summer3', 'senior', 'graduation'
+        ])
+        && validStage(stages.freshman)
+        && validStage(stages.summer1)
+        && validStage(stages.sophomore)
+        && validStage(stages.summer2)
+        && validStage(stages.junior)
+        && validStage(stages.summer3)
+        && validStage(stages.senior)
+        && validStage(stages.graduation);
+    }
+
+    function canReadPlan(studentUid) {
+      return isAdmin()
+        || (isStudent() && request.auth.uid == studentUid)
+        || (isFaculty() && hasActiveRelationship(studentUid, request.auth.uid));
+    }
+
+    function validDocumentLink(studentUid) {
+      return request.resource.data.studentUid == studentUid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 120
+        && request.resource.data.category in [
+          'Resume', 'Cover Letter', 'Degree Plan / Program Checklist',
+          'Internship / Research / Study Abroad', 'Certificate / Award', 'Other'
+        ]
+        && request.resource.data.source == 'link'
+        && request.resource.data.url is string
+        && request.resource.data.url.size() > 7
+        && request.resource.data.url.size() <= 2000
+        && request.resource.data.uploadedByUid == request.auth.uid;
+    }
+
+    function validNotificationBase() {
+      return request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.recipientUid is string
+        && request.resource.data.recipientUid.size() > 0
+        && isActiveUser(request.resource.data.recipientUid)
+        && request.resource.data.type in [
+          'plan-update', 'comment', 'document-update',
+          'relationship', 'removal-request', 'administrative'
+        ]
+        && request.resource.data.category in [
+          'planUpdates', 'comments', 'relationships',
+          'documents', 'administrative'
+        ]
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 160
+        && request.resource.data.body is string
+        && request.resource.data.body.size() > 0
+        && request.resource.data.body.size() <= 1500
+        && request.resource.data.read == false
+        && request.resource.data.eventCount is int
+        && request.resource.data.eventCount >= 1;
+    }
+
+    function notificationCreateAllowed() {
+      return isAdmin()
+        || (
+          request.resource.data.type in ['plan-update', 'document-update']
+          && isStudent()
+          && request.resource.data.studentUid == request.auth.uid
+          && request.resource.data.recipientUid == request.resource.data.facultyUid
+          && hasActiveRelationship(request.resource.data.studentUid, request.resource.data.facultyUid)
+        )
+        || (
+          request.resource.data.type == 'comment'
+          && isFaculty()
+          && request.resource.data.facultyUid == request.auth.uid
+          && request.resource.data.recipientUid == request.resource.data.studentUid
+          && hasActiveRelationship(request.resource.data.studentUid, request.resource.data.facultyUid)
+        )
+        || (
+          request.resource.data.type == 'relationship'
+          && relationshipExists(request.resource.data.studentUid, request.resource.data.facultyUid)
+          && (
+            (request.auth.uid == request.resource.data.studentUid
+              && request.resource.data.recipientUid == request.resource.data.facultyUid)
+            ||
+            (request.auth.uid == request.resource.data.facultyUid
+              && request.resource.data.recipientUid == request.resource.data.studentUid)
+          )
+        )
+        || (
+          request.resource.data.type == 'removal-request'
+          && isStudent()
+          && request.resource.data.studentUid == request.auth.uid
+          && relationshipExists(request.resource.data.studentUid, request.resource.data.facultyUid)
+          && (
+            request.resource.data.recipientUid == request.resource.data.facultyUid
+            || isActiveRole(request.resource.data.recipientUid, 'admin')
+          )
+        );
+    }
+
+    match /settings/{settingId} {
+      allow read: if settingId == 'app';
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /emailApprovals/{emailId} {
+      allow get: if isAdmin() || (verified() && emailId == authEmail());
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow create: if verified()
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'email', 'emailLower', 'displayName', 'role', 'approved', 'status',
+          'notificationPreferences', 'createdAt', 'updatedAt', 'lastLoginAt'
+        ])
+        && request.resource.data.email == authEmail()
+        && request.resource.data.emailLower == authEmail()
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.status == 'active'
+        && validNotificationPreferences(request.resource.data.notificationPreferences)
+        && (
+          (hasActiveEmailApproval()
+            && request.resource.data.role == get(approvalPath()).data.role
+            && request.resource.data.approved == true)
+          ||
+          (isOfficialStudentEmail()
+            && request.resource.data.role == 'student'
+            && request.resource.data.approved == true)
+          ||
+          (isOfficialFacultyEmail()
+            && request.resource.data.role == 'faculty'
+            && request.resource.data.approved == true)
+          ||
+          (appSettings().registrationMode == 'testing'
+            && request.resource.data.role == 'pending'
+            && request.resource.data.approved == false)
+        );
+
+      allow get: if isAdmin()
+        || (verified() && uid == request.auth.uid)
+        || (activeApproved() && resource.data.approved == true && resource.data.status == 'active');
+
+      allow list: if isAdmin()
+        || (activeApproved() && resource.data.approved == true && resource.data.status == 'active');
+
+      allow update: if (
+          isAdmin()
+          && request.resource.data.email == resource.data.email
+          && request.resource.data.emailLower == resource.data.emailLower
+        ) || (
+          verified()
+          && uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'displayName', 'notificationPreferences', 'updatedAt', 'lastLoginAt'
+          ])
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() > 0
+          && request.resource.data.displayName.size() <= 100
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['notificationPreferences'])
+            || validNotificationPreferences(request.resource.data.notificationPreferences)
+          )
+        );
+
+      allow delete: if isAdmin() && uid != request.auth.uid;
+    }
+
+    match /plans/{studentUid} {
+      allow read: if canReadPlan(studentUid);
+
+      allow create: if ((isStudent() && request.auth.uid == studentUid) || isAdmin())
+        && request.resource.data.studentUid == studentUid
+        && request.resource.data.keys().hasOnly([
+          'studentUid', 'studentName', 'studentEmail', 'stages',
+          'updatedAt', 'updatedByUid'
+        ])
+        && validStages(request.resource.data.stages);
+
+      allow update: if ((isStudent() && request.auth.uid == studentUid) || isAdmin())
+        && request.resource.data.studentUid == studentUid
+        && resource.data.studentUid == studentUid
+        && request.resource.data.keys().hasOnly([
+          'studentUid', 'studentName', 'studentEmail', 'stages',
+          'updatedAt', 'updatedByUid'
+        ])
+        && validStages(request.resource.data.stages);
+
+      allow delete: if isAdmin();
+
+      match /comments/{commentId} {
+        allow read: if canReadPlan(studentUid);
+
+        allow create: if (isAdmin() || (isFaculty() && hasActiveRelationship(studentUid, request.auth.uid)))
+          && request.resource.data.studentUid == studentUid
+          && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorName is string
+          && request.resource.data.authorName.size() > 0
+          && request.resource.data.authorName.size() <= 100
+          && request.resource.data.authorRole in ['faculty', 'admin']
+          && request.resource.data.sectionKey in [
+            'freshman', 'summer1', 'sophomore', 'summer2',
+            'junior', 'summer3', 'senior', 'graduation'
+          ]
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000;
+
+        allow update: if isAdmin() || (
+          verified()
+          && resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.studentUid == resource.data.studentUid
+          && request.resource.data.sectionKey == resource.data.sectionKey
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'updatedAt'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 2000
+        );
+
+        allow delete: if isAdmin() || (verified() && resource.data.authorUid == request.auth.uid);
+      }
+    }
+
+    match /studentDocuments/{studentUid}/items/{itemId} {
+      allow read: if canReadPlan(studentUid);
+      allow create: if ((isStudent() && request.auth.uid == studentUid) || isAdmin())
+        && validDocumentLink(studentUid);
+      allow update: if ((isStudent() && request.auth.uid == studentUid) || isAdmin())
+        && request.resource.data.studentUid == studentUid
+        && request.resource.data.uploadedByUid == resource.data.uploadedByUid
+        && request.resource.data.source == 'link'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'category', 'url', 'updatedAt'
+        ]);
+      allow delete: if (isStudent() && request.auth.uid == studentUid) || isAdmin();
+    }
+
+    match /relationships/{relationshipId} {
+      allow read: if isAdmin()
+        || (activeApproved()
+          && (resource.data.studentUid == request.auth.uid || resource.data.facultyUid == request.auth.uid));
+
+      allow create: if relationshipId == request.resource.data.studentUid + '__' + request.resource.data.facultyUid
+        && request.resource.data.status == 'active'
+        && request.resource.data.studentEmail == userData(request.resource.data.studentUid).email
+        && request.resource.data.facultyEmail == userData(request.resource.data.facultyUid).email
+        && isActiveRole(request.resource.data.studentUid, 'student')
+        && isActiveRole(request.resource.data.facultyUid, 'faculty')
+        && request.resource.data.initiatedByUid == request.auth.uid
+        && (
+          isAdmin()
+          || (isStudent() && request.auth.uid == request.resource.data.studentUid)
+          || (isFaculty() && request.auth.uid == request.resource.data.facultyUid)
+        );
+
+      allow update: if request.resource.data.studentUid == resource.data.studentUid
+        && request.resource.data.facultyUid == resource.data.facultyUid
+        && request.resource.data.studentEmail == resource.data.studentEmail
+        && request.resource.data.facultyEmail == resource.data.facultyEmail
+        && request.resource.data.status in ['active', 'removed']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'initiatedByUid', 'initiatedByRole', 'updatedByUid', 'updatedAt'
+        ])
+        && (
+          isAdmin()
+          || (isFaculty() && resource.data.facultyUid == request.auth.uid)
+          || (isStudent()
+            && resource.data.studentUid == request.auth.uid
+            && request.resource.data.status == 'active')
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /relationshipRemovalRequests/{requestId} {
+      allow read: if isAdmin()
+        || (isStudent() && resource.data.studentUid == request.auth.uid)
+        || (isFaculty() && resource.data.facultyUid == request.auth.uid);
+
+      allow create: if isStudent()
+        && request.resource.data.studentUid == request.auth.uid
+        && request.resource.data.relationshipId == requestId
+        && requestId == request.resource.data.studentUid + '__' + request.resource.data.facultyUid
+        && hasActiveRelationship(request.resource.data.studentUid, request.resource.data.facultyUid)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedByUid == request.auth.uid
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && request.resource.data.reason.size() <= 1000;
+
+      allow update: if (
+          isAdmin()
+          && request.resource.data.relationshipId == resource.data.relationshipId
+          && request.resource.data.studentUid == resource.data.studentUid
+          && request.resource.data.facultyUid == resource.data.facultyUid
+          && request.resource.data.requestedByUid == resource.data.requestedByUid
+          && request.resource.data.status in ['pending', 'approved', 'rejected']
+        ) || (
+          isStudent()
+          && resource.data.studentUid == request.auth.uid
+          && request.resource.data.studentUid == resource.data.studentUid
+          && request.resource.data.facultyUid == resource.data.facultyUid
+          && request.resource.data.relationshipId == resource.data.relationshipId
+          && request.resource.data.requestedByUid == request.auth.uid
+          && request.resource.data.status == 'pending'
+          && hasActiveRelationship(resource.data.studentUid, resource.data.facultyUid)
+          && request.resource.data.reason is string
+          && request.resource.data.reason.size() > 0
+          && request.resource.data.reason.size() <= 1000
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /relationshipInvites/{inviteId} {
+      allow read: if isAdmin()
+        || (activeApproved()
+          && (resource.data.studentEmail == currentUser().email || resource.data.facultyEmail == currentUser().email));
+
+      allow create: if request.resource.data.status == 'pending'
+        && request.resource.data.studentEmail is string
+        && request.resource.data.facultyEmail is string
+        && request.resource.data.initiatedByUid == request.auth.uid
+        && (
+          isAdmin()
+          || (isStudent()
+            && request.resource.data.studentEmail == currentUser().email
+            && request.resource.data.initiatedByRole == 'student')
+          || (isFaculty()
+            && request.resource.data.facultyEmail == currentUser().email
+            && request.resource.data.initiatedByRole == 'faculty')
+        );
+
+      allow update: if (
+          isAdmin()
+          || (activeApproved()
+            && (resource.data.studentEmail == currentUser().email || resource.data.facultyEmail == currentUser().email))
+        )
+        && request.resource.data.studentEmail == resource.data.studentEmail
+        && request.resource.data.facultyEmail == resource.data.facultyEmail
+        && request.resource.data.initiatedByUid == resource.data.initiatedByUid
+        && request.resource.data.initiatedByRole == resource.data.initiatedByRole
+        && request.resource.data.status in ['pending', 'claimed', 'cancelled'];
+
+      allow delete: if isAdmin()
+        || (activeApproved() && resource.data.initiatedByUid == request.auth.uid);
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if activeApproved()
+        && validNotificationBase()
+        && notificationCreateAllowed();
+
+      allow read: if isAdmin()
+        || (activeApproved() && resource.data.recipientUid == request.auth.uid);
+
+      allow update: if isAdmin()
+        || (
+          activeApproved()
+          && resource.data.recipientUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt'])
+        )
+        || (
+          activeApproved()
+          && resource.data.senderUid == request.auth.uid
+          && request.resource.data.senderUid == resource.data.senderUid
+          && request.resource.data.recipientUid == resource.data.recipientUid
+          && request.resource.data.type == resource.data.type
+          && request.resource.data.category == resource.data.category
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title', 'body', 'read', 'updatedAt', 'eventCount'
+          ])
+          && request.resource.data.read == false
+          && request.resource.data.eventCount is int
+          && request.resource.data.eventCount >= resource.data.eventCount
+        );
+
+      allow delete: if isAdmin()
+        || (activeApproved() && resource.data.recipientUid == request.auth.uid);
+    }
+
+    match /auditLogs/{logId} {
+      allow create: if activeApproved()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.actorName is string
+        && request.resource.data.actorName.size() > 0
+        && request.resource.data.actorName.size() <= 100
+        && request.resource.data.actorRole == currentUser().role
+        && request.resource.data.action in [
+          'plan_saved', 'comment_added', 'comment_deleted',
+          'document_added', 'document_deleted',
+          'relationship_created', 'relationship_restored',
+          'relationship_removed', 'relationship_invited',
+          'removal_requested', 'removal_approved', 'removal_rejected',
+          'user_role_changed', 'email_preapproved', 'admin_invited',
+          'settings_changed', 'profile_updated',
+          'notification_preferences_updated'
+        ]
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() > 0
+        && request.resource.data.summary.size() <= 1000;
+
+      allow read: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+  }
+}

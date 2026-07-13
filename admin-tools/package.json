@@ -1,0 +1,11 @@
+{
+  "name": "aim-admin-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bootstrap": "node bootstrap.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0"
+  }
+}

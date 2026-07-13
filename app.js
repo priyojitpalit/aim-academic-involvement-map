@@ -28,7 +28,8 @@ import {
   orderBy,
   serverTimestamp,
   writeBatch,
-  Timestamp
+  Timestamp,
+  increment
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -648,7 +649,11 @@ async function saveCurrentPlan({ reason = "autosave" } = {}) {
       summary: `${state.profile.displayName} saved ${changedSections.map(stageTitle).join(", ") || "the AIM plan"}.`,
       metadata: { changedSections, reason }
     });
-    await notifyPlanChange(controller.student, changedSections);
+    // Saving the plan must not be reported as a failure merely because an
+    // optional in-app notification could not be updated.
+    await notifyPlanChange(controller.student, changedSections).catch((error) => {
+      console.warn("Plan notification skipped", error);
+    });
     return true;
   } catch (error) {
     persistDraftLocally();
@@ -1200,12 +1205,36 @@ async function addOrGroupNotification(payload, groupKey) {
   if (!(await recipientAllows(payload.recipientUid, payload.category))) return null;
   const id = await hashText(groupKey);
   const ref = doc(db, "notifications", id);
-  const existing = await getDoc(ref);
-  if (existing.exists()) {
-    const count = Number(existing.data().eventCount || 1) + 1;
-    return updateDoc(ref, { ...payload, read: false, updatedAt: serverTimestamp(), eventCount: count });
+
+  // The sender may update a grouped notification but is not allowed to read
+  // the recipient's notification document. Try an atomic update first; when
+  // the grouped document does not exist yet, create it instead.
+  try {
+    return await updateDoc(ref, {
+      ...payload,
+      read: false,
+      updatedAt: serverTimestamp(),
+      eventCount: increment(1)
+    });
+  } catch (error) {
+    const code = String(error?.code || "");
+    if (
+      code !== "not-found" &&
+      code !== "firestore/not-found" &&
+      code !== "permission-denied" &&
+      code !== "firestore/permission-denied"
+    ) {
+      throw error;
+    }
   }
-  return setDoc(ref, { ...payload, read: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), eventCount: 1 });
+
+  return setDoc(ref, {
+    ...payload,
+    read: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    eventCount: 1
+  });
 }
 
 async function recipientAllows(recipientUid, category) {

@@ -797,7 +797,11 @@ function attachCommentHandlers(studentUid, student, options) {
           createdAt: serverTimestamp()
         });
         await recordAudit("comment_added", { studentUid, targetUid: studentUid, targetEmail: student.email, summary: `${state.profile.displayName} commented on ${stageTitle(form.dataset.section)}.` });
-        await notifyComment(student, form.dataset.section);
+        // A notification failure must not make a successfully saved comment
+        // appear to have failed.
+        await notifyComment(student, form.dataset.section).catch((error) => {
+          console.warn("Comment notification skipped", error);
+        });
         toast("Comment added.", "success");
         await renderStudentPlan(studentUid, options);
       } catch (error) {
@@ -1120,15 +1124,39 @@ async function notifyPlanChange(student, changedSections) {
 }
 
 async function notifyComment(student, sectionKey) {
+  // Faculty members are allowed to see their own relationship with a student,
+  // but not the student's complete advisor list. Avoid querying every advisor
+  // when a faculty member leaves a comment.
+  if (state.profile.role === "faculty") {
+    return addNotification({
+      recipientUid: student.id,
+      senderUid: state.user.uid,
+      studentUid: student.id,
+      facultyUid: state.user.uid,
+      type: "comment",
+      category: "comments",
+      title: "New AIM comment",
+      body: `${state.profile.displayName} commented on ${stageTitle(sectionKey)}.`,
+      relatedStudentUid: student.id
+    });
+  }
+
+  // Administrators may notify the student and all active advisors.
   const relationships = (await getRelationshipsForStudent(student.id)).filter((item) => item.status === "active");
   const recipients = new Set([student.id]);
-  if (state.profile.role === "admin") relationships.forEach((item) => recipients.add(item.facultyUid));
+  relationships.forEach((item) => recipients.add(item.facultyUid));
   recipients.delete(state.user.uid);
+
   await Promise.all(Array.from(recipients).map((recipientUid) => addNotification({
-    recipientUid, senderUid: state.user.uid, studentUid: student.id,
-    facultyUid: relationships.find((item) => item.facultyUid === state.user.uid || item.facultyUid === recipientUid)?.facultyUid || "",
-    type: "comment", category: "comments", title: "New AIM comment",
-    body: `${state.profile.displayName} commented on ${stageTitle(sectionKey)}.`, relatedStudentUid: student.id
+    recipientUid,
+    senderUid: state.user.uid,
+    studentUid: student.id,
+    facultyUid: relationships.find((item) => item.facultyUid === recipientUid)?.facultyUid || "",
+    type: "comment",
+    category: "comments",
+    title: "New AIM comment",
+    body: `${state.profile.displayName} commented on ${stageTitle(sectionKey)}.`,
+    relatedStudentUid: student.id
   })));
 }
 

@@ -1006,20 +1006,60 @@ async function createRelationship(studentUid, facultyUid, initiatedByRole) {
   const [student, faculty] = await Promise.all([getUser(studentUid), getUser(facultyUid)]);
   if (!student || student.role !== "student") throw new Error("A valid student account is required.");
   if (!faculty || faculty.role !== "faculty") throw new Error("A valid faculty account is required.");
+
   const id = relationshipId(studentUid, facultyUid);
   const relationshipRef = doc(db, "relationships", id);
-  const existing = await getDoc(relationshipRef);
-  if (existing.exists()) {
-    await updateDoc(relationshipRef, { status: "active", initiatedByUid: state.user.uid, initiatedByRole, updatedByUid: state.user.uid, updatedAt: serverTimestamp() });
+
+  // A participant may not read a relationship document before it exists.
+  // Treat a permission-denied read as "not created yet"; the subsequent
+  // create is still checked by the Firestore relationship rules.
+  let existing = null;
+  try {
+    existing = await getDoc(relationshipRef);
+  } catch (error) {
+    const code = String(error?.code || "");
+    if (code !== "permission-denied" && code !== "firestore/permission-denied") {
+      throw error;
+    }
+  }
+
+  const restoring = existing?.exists() === true;
+  if (restoring) {
+    await updateDoc(relationshipRef, {
+      status: "active",
+      initiatedByUid: state.user.uid,
+      initiatedByRole,
+      updatedByUid: state.user.uid,
+      updatedAt: serverTimestamp()
+    });
   } else {
     await setDoc(relationshipRef, {
-      studentUid, facultyUid, studentEmail: student.email, facultyEmail: faculty.email,
-      status: "active", initiatedByUid: state.user.uid, initiatedByRole,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+      studentUid,
+      facultyUid,
+      studentEmail: student.email,
+      facultyEmail: faculty.email,
+      status: "active",
+      initiatedByUid: state.user.uid,
+      initiatedByRole,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     });
   }
-  await recordAudit(existing.exists() ? "relationship_restored" : "relationship_created", { studentUid, facultyUid, targetUid: state.user.uid === studentUid ? facultyUid : studentUid, summary: `${student.displayName} and ${faculty.displayName} were connected in AIM.` });
-  await notifyRelationshipStatus(studentUid, facultyUid, `${student.displayName} and ${faculty.displayName} are now connected in AIM.`);
+
+  await recordAudit(restoring ? "relationship_restored" : "relationship_created", {
+    studentUid,
+    facultyUid,
+    targetUid: state.user.uid === studentUid ? facultyUid : studentUid,
+    summary: `${student.displayName} and ${faculty.displayName} were connected in AIM.`
+  });
+
+  // A notification problem should never undo or falsely report a successful
+  // advisor connection.
+  await notifyRelationshipStatus(
+    studentUid,
+    facultyUid,
+    `${student.displayName} and ${faculty.displayName} are now connected in AIM.`
+  ).catch((error) => console.warn("Relationship notification skipped", error));
 }
 
 async function createRelationshipInvite({ studentEmail, facultyEmail, initiatedByRole }) {

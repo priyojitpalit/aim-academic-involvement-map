@@ -226,26 +226,17 @@ function renderSetupRequired() {
 }
 
 function renderAuthPage(tab = "signin") {
-  const testing = state.settings.registrationMode === "testing";
   appRoot.innerHTML = `
     <main id="main-content" class="auth-page">
       <section class="auth-shell card">
         <div class="auth-brand">
           <div class="brand-lockup"><span class="brand-mark">AIM</span><span class="brand-name">Academic &amp;<br>Involvement Map</span></div>
-          <h1>Plan four years with purpose.</h1>
-          <p>Students build an academic, involvement, and career roadmap. Advisors review progress and leave guidance in one shared space.</p>
-          <div class="auth-feature-list">
-            <div class="auth-feature">Four-year visual planning map</div>
-            <div class="auth-feature">Automatic saving and advisor comments</div>
-            <div class="auth-feature">Secure access for students, advisors, and administrators</div>
-          </div>
         </div>
         <div class="auth-panel">
-          <h2>${tab === "signin" ? "Welcome back" : "Create your AIM account"}</h2>
-          <p class="subtle">${testing ? "Any verified email address may register. Non-college accounts require administrator approval." : `Use an @${state.settings.studentDomain} or @${state.settings.facultyDomain} account, or an address approved by an administrator.`}</p>
+          <h2>${tab === "signin" ? "Sign in" : "Create account"}</h2>
           <div class="auth-tabs">
             <button class="auth-tab ${tab === "signin" ? "active" : ""}" data-auth-tab="signin">Sign in</button>
-            <button class="auth-tab ${tab === "register" ? "active" : ""}" data-auth-tab="register">Register</button>
+            <button class="auth-tab ${tab === "register" ? "active" : ""}" data-auth-tab="register">Create account</button>
           </div>
           ${tab === "signin" ? signinFormHtml() : registerFormHtml()}
         </div>
@@ -368,8 +359,8 @@ function renderVerificationPage(user, justSent = false) {
 
 function renderPendingPage() {
   renderMessagePage(
-    "Administrator approval needed",
-    "Your email address is verified, but your AIM role has not yet been approved. An administrator can assign you as a student, faculty member, or administrator from Manage Users.",
+    "Account awaiting approval",
+    "An administrator must activate this account.",
     "⏳",
     true
   );
@@ -377,8 +368,8 @@ function renderPendingPage() {
 
 function renderAccessDenied(email) {
   renderMessagePage(
-    "This email is not approved",
-    `${email || "This address"} is not an official college address and has not been approved by an AIM administrator.`,
+    "Account not authorized",
+    `${email || "This account"} cannot access AIM.`,
     "!",
     true
   );
@@ -526,15 +517,14 @@ async function renderStudentPlan(studentUid, options = {}) {
 
   document.getElementById("main-content").innerHTML = `
     <div class="page-head">
-      <div><h2>${canEdit && studentUid === state.user.uid ? "Your four-year AIM journey" : `${escapeHtml(student.displayName)}'s AIM journey`}</h2>
-      <p>${canEdit ? "Open one stage at a time. Your work saves automatically after you pause." : "Open a stage to review the student's plan and advisor comments."}</p></div>
+      <div><h2>${canEdit && studentUid === state.user.uid ? "My AIM Map" : `${escapeHtml(student.displayName)}'s AIM Map`}</h2></div>
       <div class="button-row"><button class="btn btn-secondary" id="print-plan-button" type="button">Print / Save as PDF</button>${options.backView ? '<button class="btn btn-secondary" id="back-from-plan">← Back</button>' : ""}</div>
     </div>
     ${useLocalDraft ? '<div class="status-banner testing"><strong>Recovered work:</strong> Your recent changes were restored and will save automatically.</div>' : ""}
     ${aimGuideHtml()}
     <section class="panel plan-documents-summary">
-      <div class="panel-head"><div><h3>Portfolio &amp; document links</h3><p class="subtle">A current résumé is recommended. Students can link to OneDrive, Google Drive, Canvas, or another approved location.</p></div>
-      <button class="btn btn-secondary btn-small" id="open-plan-documents" type="button">${studentUid === state.user.uid ? "Manage links" : "View links"}</button></div>
+      <div class="panel-head"><div><h3>Portfolio &amp; documents</h3></div>
+      <button class="btn btn-secondary btn-small" id="open-plan-documents" type="button">${studentUid === state.user.uid ? "Manage" : "View"}</button></div>
       ${documents.length ? compactDocumentListHtml(documents) : '<p class="subtle">No document links have been added yet.</p>'}
     </section>
     ${canEdit ? `<div id="map-form" class="aim-map-form"><div class="map-toolbar"><span class="map-status" id="map-status">${useLocalDraft ? "Recovered recent changes" : planSnap.exists() ? `Saved ${formatDate(cloudPlan.updatedAt)}` : "Not saved yet"}</span><button class="btn btn-primary" id="map-save-now" type="button">Save now</button></div>${timelineHtml(plan.stages || {}, comments, true, canComment, studentUid)}</div>` : timelineHtml(plan.stages || {}, comments, false, canComment, studentUid)}
@@ -834,7 +824,7 @@ async function renderDocuments(studentUid, options = {}) {
   const canManage = studentUid === state.user.uid || state.profile.role === "admin";
 
   document.getElementById("main-content").innerHTML = `
-    <div class="page-head"><div><h2>${studentUid === state.user.uid ? "My portfolio & document links" : `${escapeHtml(student.displayName)}'s document links`}</h2><p>Add shareable links to your résumé and other planning documents.</p></div>${options.backView ? '<button class="btn btn-secondary" id="documents-back">← Back</button>' : ""}</div>
+    <div class="page-head"><div><h2>${studentUid === state.user.uid ? "My Documents" : `${escapeHtml(student.displayName)}'s Documents`}</h2></div>${options.backView ? '<button class="btn btn-secondary" id="documents-back">← Back</button>' : ""}</div>
     <div class="status-banner official"><strong>Shareable links:</strong> Make sure each advisor has permission to open the linked file.</div>
     ${canManage ? `<section class="panel"><h3>Add a document link</h3><form id="document-link-form" class="grid grid-3">
       <div class="field"><label for="link-title">Document title</label><input id="link-title" maxlength="120" placeholder="Current résumé" required></div>
@@ -896,9 +886,9 @@ async function renderAdvisors() {
   const requests = new Map(requestsSnap.docs.map((item) => [item.data().relationshipId, { id: item.id, ...item.data() }]));
   const advisors = (await Promise.all(active.map(async (relationship) => ({ relationship, person: await getUser(relationship.facultyUid) })))).filter((item) => item.person);
 
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My advisors</h2><p>You may have several advisors. Removing an advisor requires administrator approval.</p></div></div>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My Advisors</h2></div></div>
     <div class="grid grid-2"><section class="panel"><h3>Current advisors</h3><div class="people-list">${advisors.length ? advisors.map(({ relationship, person }) => personCardHtml(person, "advisor", { request: requests.get(relationship.id) })).join("") : emptyStateHtml("No advisors yet", "Choose an advisor from the faculty directory or enter an email address.")}</div></section>
-    <section class="panel"><h3>Add an advisor</h3><form id="advisor-email-form" class="form-stack"><div class="field"><label for="advisor-email">Faculty email</label><input id="advisor-email" type="email" list="advisor-directory" required><datalist id="advisor-directory">${(await getUsersByRole("faculty")).map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist><small>Choose a registered faculty member or enter an email. An unregistered person will connect after they create and verify their account.</small></div><button class="btn btn-primary" type="submit">Add advisor</button></form></section></div>`;
+    <section class="panel"><h3>Add an advisor</h3><form id="advisor-email-form" class="form-stack"><div class="field"><label for="advisor-email">Faculty email</label><input id="advisor-email" type="email" list="advisor-directory" required><datalist id="advisor-directory">${(await getUsersByRole("faculty")).map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><button class="btn btn-primary" type="submit">Add advisor</button></form></section></div>`;
 
   document.getElementById("advisor-email-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -941,9 +931,9 @@ async function renderAdvisees() {
   const active = relationships.filter((item) => item.status === "active");
   const students = (await Promise.all(active.map((item) => getUser(item.studentUid)))).filter(Boolean);
 
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My advisees</h2><p>One advisor may work with many students, and each student may have several advisors.</p></div></div>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My Advisees</h2></div></div>
     <div class="grid grid-2"><section class="panel"><h3>Current advisees</h3><div class="people-list">${students.length ? students.map((person) => personCardHtml(person, "advisee")).join("") : emptyStateHtml("No advisees yet", "Add a student by email address.")}</div></section>
-    <section class="panel"><h3>Add student by email</h3><form id="advisee-email-form" class="form-stack"><div class="field"><label for="advisee-email">Student email</label><input id="advisee-email" type="email" list="student-directory" required><datalist id="student-directory">${(await getUsersByRole("student")).map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist><small>If the student has not registered, AIM saves a pending connection for later.</small></div><button class="btn btn-primary" type="submit">Add advisee</button></form></section></div>`;
+    <section class="panel"><h3>Add student</h3><form id="advisee-email-form" class="form-stack"><div class="field"><label for="advisee-email">Student email</label><input id="advisee-email" type="email" list="student-directory" required><datalist id="student-directory">${(await getUsersByRole("student")).map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><button class="btn btn-primary" type="submit">Add student</button></form></section></div>`;
 
   document.getElementById("advisee-email-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1162,7 +1152,7 @@ async function renderNotifications() {
   const snap = await getDocs(query(collection(db, "notifications"), where("recipientUid", "==", state.user.uid)));
   const notifications = snap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => timestampMillis(b.updatedAt || b.createdAt) - timestampMillis(a.updatedAt || a.createdAt));
   const unread = notifications.filter((item) => !item.read).length;
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Notifications</h2><p>${unread ? `${unread} unread notification${unread === 1 ? "" : "s"}.` : "You are all caught up."} Email is not used for plan activity.</p></div>${unread ? '<button class="btn btn-secondary" id="mark-all-read">Mark all read</button>' : ""}</div>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Notifications</h2>${unread ? `<p>${unread} unread notification${unread === 1 ? "" : "s"}</p>` : ""}</div>${unread ? '<button class="btn btn-secondary" id="mark-all-read">Mark all read</button>' : ""}</div>
     <div class="notification-list">${notifications.length ? notifications.map(notificationHtml).join("") : emptyStateHtml("No notifications", "Plan updates, comments, document links, and relationship changes will appear here.")}</div>`;
 
   document.getElementById("mark-all-read")?.addEventListener("click", async () => {
@@ -1190,9 +1180,9 @@ function notificationHtml(item) {
 
 async function renderProfile() {
   const prefs = { ...DEFAULT_NOTIFICATION_PREFERENCES, ...(state.profile.notificationPreferences || {}) };
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My profile</h2><p>Update your display name and choose which AIM notifications you want to receive.</p></div></div>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My Profile</h2></div></div>
     <div class="grid grid-2"><section class="panel"><h3>Account</h3><form id="profile-form" class="form-stack"><div class="field"><label for="profile-name">Display name</label><input id="profile-name" maxlength="100" value="${escapeAttr(state.profile.displayName)}" required></div><div class="field"><label>Email</label><input value="${escapeAttr(state.profile.email)}" disabled></div><div class="field"><label>Role</label><input value="${escapeAttr(capitalize(state.profile.role))}" disabled></div><button class="btn btn-primary" type="submit">Save profile</button></form></section>
-    <section class="panel"><h3>Notification preferences</h3><p class="subtle">Choose which AIM activity appears in your notifications.</p><form id="notification-preferences-form" class="preference-list">
+    <section class="panel"><h3>Notification Preferences</h3><form id="notification-preferences-form" class="preference-list">
       ${preferenceCheckbox("allMuted", "Mute all AIM notifications", prefs.allMuted)}
       <hr>
       ${preferenceCheckbox("planUpdates", "Plan updates", prefs.planUpdates)}
@@ -1251,10 +1241,10 @@ async function renderAdminDashboard() {
   const pendingRemovals = removalSnap.docs.filter((item) => item.data().status === "pending").length;
   const summary = summarizeAuditLogs(logs);
 
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Administrator dashboard</h2><p>Review accounts, advising relationships, and recent AIM activity.</p></div></div>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Administrator Dashboard</h2></div></div>
     <div class="grid grid-3">${metricHtml(users.filter((u) => u.role === "student" && u.approved && u.status === "active").length, "Approved students")}${metricHtml(users.filter((u) => u.role === "faculty" && u.approved && u.status === "active").length, "Approved faculty")}${metricHtml(users.filter((u) => u.role === "admin" && u.approved && u.status === "active").length, "Administrators")}${metricHtml(relationshipsSnap.docs.filter((item) => item.data().status === "active").length, "Active relationships")}${metricHtml(pendingRemovals, "Removal requests")}${metricHtml(users.filter((u) => u.role === "pending" || !u.approved).length, "Pending accounts")}</div>
-    <section class="panel daily-summary" style="margin-top:1rem"><div class="panel-head"><div><h3>Today's AIM summary</h3><p class="subtle">Activity recorded today.</p></div><span class="subtle">${new Date().toLocaleDateString()}</span></div><div class="summary-grid">${metricHtml(summary.planSaves, "Plan saves")}${metricHtml(summary.comments, "Comments")}${metricHtml(summary.relationships, "Relationship changes")}${metricHtml(summary.documents, "Document-link changes")}${metricHtml(summary.userChanges, "User/admin changes")}${metricHtml(summary.total, "Total logged actions")}</div></section>
-    <div class="grid grid-2" style="margin-top:1rem"><section class="panel"><h3>Application settings</h3><form id="admin-settings-form" class="form-stack"><div class="field"><label for="registration-mode">Registration mode</label><select id="registration-mode"><option value="testing" ${state.settings.registrationMode === "testing" ? "selected" : ""}>Allow any verified email; administrator approval required</option><option value="official" ${state.settings.registrationMode === "official" ? "selected" : ""}>College and administrator-approved email addresses only</option></select></div><div class="field"><label for="app-url">AIM web address</label><input id="app-url" type="url" value="${escapeAttr(state.settings.appUrl || "")}" required></div><div class="field"><label for="autosave-delay">Autosave delay</label><select id="autosave-delay"><option value="15" ${Number(state.settings.autosaveDelaySeconds) === 15 ? "selected" : ""}>15 seconds</option><option value="25" ${Number(state.settings.autosaveDelaySeconds || 25) === 25 ? "selected" : ""}>25 seconds</option><option value="30" ${Number(state.settings.autosaveDelaySeconds) === 30 ? "selected" : ""}>30 seconds</option></select></div><button class="btn btn-primary" type="submit">Save settings</button></form></section>
+    <section class="panel daily-summary" style="margin-top:1rem"><div class="panel-head"><div><h3>Today's Summary</h3></div><span class="subtle">${new Date().toLocaleDateString()}</span></div><div class="summary-grid">${metricHtml(summary.planSaves, "Plan saves")}${metricHtml(summary.comments, "Comments")}${metricHtml(summary.relationships, "Relationship changes")}${metricHtml(summary.documents, "Document-link changes")}${metricHtml(summary.userChanges, "User/admin changes")}${metricHtml(summary.total, "Total logged actions")}</div></section>
+    <div class="grid grid-2" style="margin-top:1rem"><section class="panel"><h3>Application settings</h3><form id="admin-settings-form" class="form-stack"><div class="field"><label for="registration-mode">Registration mode</label><select id="registration-mode"><option value="testing" ${state.settings.registrationMode === "testing" ? "selected" : ""}>Testing</option><option value="official" ${state.settings.registrationMode === "official" ? "selected" : ""}>College accounts only</option></select></div><div class="field"><label for="app-url">AIM web address</label><input id="app-url" type="url" value="${escapeAttr(state.settings.appUrl || "")}" required></div><div class="field"><label for="autosave-delay">Autosave delay</label><select id="autosave-delay"><option value="15" ${Number(state.settings.autosaveDelaySeconds) === 15 ? "selected" : ""}>15 seconds</option><option value="25" ${Number(state.settings.autosaveDelaySeconds || 25) === 25 ? "selected" : ""}>25 seconds</option><option value="30" ${Number(state.settings.autosaveDelaySeconds) === 30 ? "selected" : ""}>30 seconds</option></select></div><button class="btn btn-primary" type="submit">Save settings</button></form></section>
     <section class="panel"><h3>Pending actions</h3><ul class="plain-list"><li><strong>${pendingRemovals}</strong> advisor-removal request${pendingRemovals === 1 ? "" : "s"}</li><li><strong>${users.filter((u) => u.role === "pending" || !u.approved).length}</strong> account${users.filter((u) => u.role === "pending" || !u.approved).length === 1 ? "" : "s"} awaiting approval</li><li><strong>${relationshipsSnap.docs.filter((item) => item.data().status === "pending").length}</strong> advising relationship${relationshipsSnap.docs.filter((item) => item.data().status === "pending").length === 1 ? "" : "s"} awaiting registration or approval</li></ul></section></div>`;
 
   document.getElementById("admin-settings-form").addEventListener("submit", async (event) => {
@@ -1300,7 +1290,7 @@ async function renderAdminPlans() {
   requireAdmin();
   const [students, plansSnap] = await Promise.all([getUsersByRole("student"), getDocs(collection(db, "plans"))]);
   const plans = new Map(plansSnap.docs.map((item) => [item.id, item.data()]));
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>All student plans</h2><p>Administrators can search and open every approved student's plan and document links.</p></div></div>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>All Student Plans</h2></div></div>
     <section class="panel" style="margin-bottom:1rem"><div class="field"><label for="student-plan-search">Find a student</label><input id="student-plan-search" type="search" placeholder="Search by name or email"></div></section>
     <div id="student-plan-table" class="table-wrap">${adminPlansTableHtml(students, plans)}</div>`;
   document.getElementById("student-plan-search").addEventListener("input", (event) => {
@@ -1339,8 +1329,8 @@ async function renderAdminUsers() {
   const users = usersSnap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
   const approvals = approvalsSnap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => (a.email || a.id).localeCompare(b.email || b.id));
 
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Manage users</h2><p>Manage registered users or approve an email as Student, Faculty, or Administrator before the person registers.</p></div></div>
-    <section class="panel" style="margin-bottom:1rem"><h3>Add or approve an email</h3><form id="preapprove-form" class="grid grid-3"><div class="field"><label for="preapprove-email">Email address</label><input id="preapprove-email" type="email" required></div><div class="field"><label for="preapprove-role">Role</label><select id="preapprove-role"><option value="student">Student</option><option value="faculty">Faculty</option><option value="admin">Administrator</option></select></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Add / approve email</button></div></form><p class="subtle">A registered account is updated immediately. For a new email address, share the AIM registration instructions with the person.</p></section>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Manage Users</h2></div></div>
+    <section class="panel" style="margin-bottom:1rem"><h3>Add or Approve Email</h3><form id="preapprove-form" class="grid grid-3"><div class="field"><label for="preapprove-email">Email address</label><input id="preapprove-email" type="email" required></div><div class="field"><label for="preapprove-role">Role</label><select id="preapprove-role"><option value="student">Student</option><option value="faculty">Faculty</option><option value="admin">Administrator</option></select></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Add / approve email</button></div></form></section>
     <section class="panel" style="margin-bottom:1rem"><div class="field"><label for="user-search">Search registered users</label><input id="user-search" type="search" placeholder="Name or email"></div></section>
     <div id="users-table" class="table-wrap">${usersTableHtml(users)}</div>
     <section class="panel" style="margin-top:1rem"><div class="panel-head"><h3>Approved email addresses</h3><span class="subtle">${approvals.length}</span></div>${approvals.length ? `<div class="table-wrap"><table><thead><tr><th>Email</th><th>Role</th><th>Active</th><th>Actions</th></tr></thead><tbody>${approvals.map((item) => `<tr><td>${escapeHtml(item.email || item.id)}</td><td>${rolePill(item.role)}</td><td>${item.active ? statusPill("active") : statusPill("disabled")}</td><td><button class="btn btn-danger btn-small" data-remove-approval="${escapeAttr(item.id)}">Remove approval</button></td></tr>`).join("")}</tbody></table></div>` : '<p class="subtle">No additional approved email addresses.</p>'}</section>`;
@@ -1425,8 +1415,8 @@ async function renderAdminRelationships() {
   const pendingInvites = inviteSnap.docs.map((item) => ({ id: item.id, ...item.data() })).filter((item) => item.status === "pending");
   const pendingCount = Array.from(requests.values()).filter((item) => item.status === "pending").length;
 
-  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Advisor relationships</h2><p>Search registered people or type an email that has not registered yet. Relationships are many-to-many.</p></div><span class="pill ${pendingCount ? "pill-pending" : "pill-active"}">${pendingCount} removal request${pendingCount === 1 ? "" : "s"} pending</span></div>
-    <section class="panel" style="margin-bottom:1rem"><h3>Add student ↔ advisor relationship</h3><form id="admin-relationship-form" class="grid grid-3"><div class="field"><label for="admin-student-email">Search or enter student email</label><input id="admin-student-email" type="email" list="admin-student-list" placeholder="student@email.shc.edu" required><datalist id="admin-student-list">${students.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field"><label for="admin-faculty-email">Search or enter advisor email</label><input id="admin-faculty-email" type="email" list="admin-faculty-list" placeholder="advisor@shc.edu" required><datalist id="admin-faculty-list">${faculty.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Create relationship</button></div></form><p class="subtle">If either person has not registered, the relationship remains pending until that person creates an account with the same email address.</p></section>
+  document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Advisor Relationships</h2></div><span class="pill ${pendingCount ? "pill-pending" : "pill-active"}">${pendingCount} removal request${pendingCount === 1 ? "" : "s"} pending</span></div>
+    <section class="panel" style="margin-bottom:1rem"><h3>Add Student–Advisor Relationship</h3><form id="admin-relationship-form" class="grid grid-3"><div class="field"><label for="admin-student-email">Student email</label><input id="admin-student-email" type="email" list="admin-student-list" placeholder="student@email.shc.edu" required><datalist id="admin-student-list">${students.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field"><label for="admin-faculty-email">Advisor email</label><input id="admin-faculty-email" type="email" list="admin-faculty-list" placeholder="advisor@shc.edu" required><datalist id="admin-faculty-list">${faculty.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Create relationship</button></div></form></section>
     ${pendingInvites.length ? `<section class="panel" style="margin-bottom:1rem"><div class="panel-head"><h3>Pending unregistered connections</h3><span class="subtle">${pendingInvites.length}</span></div><div class="table-wrap"><table><thead><tr><th>Student email</th><th>Advisor email</th><th>Created</th><th>Action</th></tr></thead><tbody>${pendingInvites.map((item) => `<tr><td>${escapeHtml(item.studentEmail)}</td><td>${escapeHtml(item.facultyEmail)}</td><td>${formatDate(item.createdAt)}</td><td><button class="btn btn-danger btn-small" data-cancel-invite="${item.id}">Cancel</button></td></tr>`).join("")}</tbody></table></div></section>` : ""}
     <div class="table-wrap"><table><thead><tr><th>Student</th><th>Faculty</th><th>Status</th><th>Removal request</th><th>Actions</th></tr></thead><tbody>${relationships.length ? relationships.map((item) => relationshipRowHtml(item, requests.get(item.id))).join("") : '<tr><td colspan="5" class="subtle">No relationships yet.</td></tr>'}</tbody></table></div>`;
 
@@ -1449,7 +1439,7 @@ async function renderAdminRelationships() {
       } else {
         await createRelationshipInvite({ studentEmail, facultyEmail, initiatedByRole: "admin" });
         await recordAudit("relationship_invited", { targetEmail: `${studentEmail}; ${facultyEmail}`, summary: `${state.profile.displayName} created a pending student-advisor connection.` });
-        toast("Pending relationship saved. Tell unregistered users to create their AIM accounts.", "success");
+        toast("Pending relationship saved.", "success");
       }
       renderAdminRelationships();
     } catch (error) { toast(friendlyError(error), "error"); setBusy(button, false, "Create relationship"); }

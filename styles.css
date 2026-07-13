@@ -77,6 +77,9 @@ a { color: var(--brand-2); }
   position: relative;
   min-height: 610px;
   padding: clamp(2rem, 5vw, 4.5rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: #fff;
   background:
     linear-gradient(145deg, rgba(21,50,74,.96), rgba(47,111,132,.92)),
@@ -90,16 +93,11 @@ a { color: var(--brand-2); }
   background: linear-gradient(180deg, rgba(12,31,47,.1), rgba(12,31,47,.42));
   z-index: -1;
 }
-.brand-lockup { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+.brand-lockup { display: flex; align-items: center; justify-content: center; gap: 1rem; flex-wrap: wrap; text-align: left; }
 .brand-mark { font-size: clamp(3rem, 7vw, 5.6rem); letter-spacing: .08em; font-weight: 300; }
 .brand-name { font-size: clamp(1.2rem, 2.6vw, 2rem); font-weight: 300; line-height: 1.1; }
-.auth-brand h1 { font-size: clamp(2rem, 4vw, 3.8rem); margin: 4.5rem 0 1rem; max-width: 10ch; line-height: 1.02; }
-.auth-brand p { max-width: 35rem; font-size: 1.08rem; line-height: 1.7; color: rgba(255,255,255,.88); }
-.auth-feature-list { display: grid; gap: .75rem; margin-top: 2rem; }
-.auth-feature { display: flex; gap: .75rem; align-items: center; }
-.auth-feature::before { content: "✓"; display: grid; place-items: center; width: 1.55rem; height: 1.55rem; border-radius: 50%; background: rgba(255,255,255,.17); }
 
-.auth-panel { padding: clamp(1.6rem, 4vw, 3.2rem); background: #fff; }
+.auth-panel { padding: clamp(1.6rem, 4vw, 3.2rem); background: #fff; display: flex; flex-direction: column; justify-content: center; }
 .auth-panel h2 { margin: 0 0 .4rem; }
 .auth-panel .subtle { margin-top: 0; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; background: var(--surface-soft); padding: .35rem; border-radius: 12px; margin: 1.5rem 0; }
@@ -301,7 +299,6 @@ tr:last-child td { border-bottom: 0; }
 @media (max-width: 920px) {
   .auth-shell { grid-template-columns: 1fr; }
   .auth-brand { min-height: 360px; }
-  .auth-brand h1 { margin-top: 2.5rem; }
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: fixed; left: 0; transform: translateX(-102%); transition: transform .2s ease; width: 260px; box-shadow: 12px 0 35px rgba(0,0,0,.2); }
   .sidebar.open { transform: translateX(0); }

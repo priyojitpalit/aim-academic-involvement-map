@@ -29,7 +29,8 @@ import {
   serverTimestamp,
   writeBatch,
   Timestamp,
-  increment
+  increment,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -81,6 +82,7 @@ let firebaseApp;
 let auth;
 let db;
 let authRun = 0;
+let notificationUnsubscribe = null;
 
 const state = {
   user: null,
@@ -109,6 +111,10 @@ window.addEventListener("beforeunload", () => persistDraftLocally());
 
 async function handleAuthState(user) {
   const run = ++authRun;
+  if (notificationUnsubscribe) {
+    notificationUnsubscribe();
+    notificationUnsubscribe = null;
+  }
   state.user = user;
   state.profile = null;
   state.autosave = null;
@@ -400,7 +406,7 @@ function renderShell() {
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-logo"><strong>AIM</strong><span>Academic &amp;<br>Involvement Map</span></div>
         <nav class="nav-list" aria-label="Main navigation">
-          ${nav.map((item) => `<button class="nav-button" data-nav="${item.view}"><span>${item.icon}</span><span>${escapeHtml(item.label)}</span></button>`).join("")}
+          ${nav.map((item) => `<button class="nav-button" data-nav="${item.view}"><span class="nav-icon" aria-hidden="true">${item.icon}</span><span class="nav-label">${escapeHtml(item.label)}</span>${item.view === "notifications" ? '<span class="notification-badge" id="notification-badge" aria-label="0 unread notifications" hidden>0</span>' : ""}</button>`).join("")}
         </nav>
         <div class="sidebar-footer"><div class="user-mini"><strong>${escapeHtml(state.profile.displayName)}</strong><span>${escapeHtml(state.profile.email)}</span><span>${capitalize(role)}</span></div></div>
       </aside>
@@ -419,13 +425,55 @@ function renderShell() {
     await signOut(auth);
   });
   document.getElementById("mobile-menu").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
+  startNotificationBadgeListener();
   navigate(defaultViewForRole(role));
+}
+
+function startNotificationBadgeListener() {
+  if (notificationUnsubscribe) {
+    notificationUnsubscribe();
+    notificationUnsubscribe = null;
+  }
+  if (!db || !state.user) return;
+
+  const notificationQuery = query(
+    collection(db, "notifications"),
+    where("recipientUid", "==", state.user.uid)
+  );
+
+  notificationUnsubscribe = onSnapshot(
+    notificationQuery,
+    (snapshot) => {
+      const unreadCount = snapshot.docs.reduce(
+        (count, item) => count + (item.data().read === true ? 0 : 1),
+        0
+      );
+      updateNotificationBadge(unreadCount);
+    },
+    (error) => {
+      console.warn("Notification badge could not be updated", error);
+      updateNotificationBadge(0);
+    }
+  );
+}
+
+function updateNotificationBadge(count) {
+  const badge = document.getElementById("notification-badge");
+  if (!badge) return;
+
+  const unreadCount = Math.max(0, Number(count) || 0);
+  badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+  badge.hidden = unreadCount === 0;
+  badge.setAttribute(
+    "aria-label",
+    `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`
+  );
 }
 
 function navItemsForRole(role) {
   if (role === "student") {
     return [
-      { view: "map", label: "My AIM Map", icon: "🗺" },
+      { view: "map", label: "My AIM Map", icon: "🧭" },
       { view: "documents", label: "Document Links", icon: "🔗" },
       { view: "advisors", label: "My Advisors", icon: "👥" },
       { view: "notifications", label: "Notifications", icon: "🔔" },
@@ -441,7 +489,7 @@ function navItemsForRole(role) {
   }
   return [
     { view: "admin", label: "Admin Dashboard", icon: "▦" },
-    { view: "plans", label: "All Student Plans", icon: "🗺" },
+    { view: "plans", label: "All Student Plans", icon: "🧭" },
     { view: "users", label: "Manage Users", icon: "👤" },
     { view: "relationships", label: "Relationships", icon: "⇄" },
     { view: "notifications", label: "Notifications", icon: "🔔" },

@@ -751,3 +751,65 @@ tr:last-child td { border-bottom: 0; }
   .auth-shell { background-position: 16% center; }
   .brand-lockup { background: rgba(255,255,255,.78); }
 }
+
+
+/* Mobile login artwork:
+   keep the entire illustration inside the upper branding panel instead of
+   stretching one background behind both the artwork and the login form. */
+@media (max-width: 920px) {
+  .auth-shell {
+    background: none;
+  }
+
+  .auth-brand {
+    min-height: clamp(500px, 78vw, 640px);
+    background-color: #f5f2fb;
+    background-image: url('./assets/aim-login-background.png');
+    background-repeat: no-repeat;
+    background-size: 100% auto;
+    background-position: center bottom;
+  }
+
+  .auth-brand::before {
+    background: linear-gradient(
+      180deg,
+      rgba(255,255,255,.97) 0%,
+      rgba(255,255,255,.89) 34%,
+      rgba(255,255,255,.38) 55%,
+      rgba(255,255,255,0) 76%
+    );
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-brand {
+    min-height: 500px;
+    padding: 1rem;
+    background-size: 100% auto;
+    background-position: center bottom;
+  }
+
+  .brand-lockup {
+    width: 100%;
+    max-width: 22rem;
+    padding: 1rem;
+    background: rgba(255,255,255,.82);
+    backdrop-filter: blur(5px);
+  }
+
+  .brand-mark {
+    font-size: clamp(3.4rem, 17vw, 4.5rem);
+  }
+
+  .brand-name {
+    max-width: 10.5rem;
+    font-size: .94rem;
+  }
+
+  .brand-tagline {
+    margin-top: .9rem;
+    padding-top: .8rem;
+    font-size: .96rem;
+    line-height: 1.45;
+  }
+}

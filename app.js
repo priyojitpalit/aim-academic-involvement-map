@@ -237,7 +237,13 @@ function renderAuthPage(tab = "signin") {
     <main id="main-content" class="auth-page">
       <section class="auth-shell card">
         <div class="auth-brand">
-          <div class="brand-lockup"><span class="brand-mark">AIM</span><span class="brand-name">Academic &amp;<br>Involvement Map</span></div>
+          <div class="brand-lockup">
+            <div class="brand-title-line">
+              <span class="brand-mark">AIM</span>
+              <span class="brand-name">Academic &amp; Involvement Map</span>
+            </div>
+            <p class="brand-tagline">Plan your academics. Shape your college experience. Prepare for what&rsquo;s next.</p>
+          </div>
         </div>
         <div class="auth-panel">
           <h2>${tab === "signin" ? "Sign in" : "Create account"}</h2>
@@ -404,7 +410,7 @@ function renderShell() {
   appRoot.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
-        <div class="sidebar-logo"><strong>AIM</strong><span>Academic &amp;<br>Involvement Map</span></div>
+        <div class="sidebar-logo"><strong>AIM</strong><span>Academic &amp; Involvement Map</span></div>
         <nav class="nav-list" aria-label="Main navigation">
           ${nav.map((item) => `<button class="nav-button" data-nav="${item.view}"><span class="nav-icon" aria-hidden="true">${item.icon}</span><span class="nav-label">${escapeHtml(item.label)}</span>${item.view === "notifications" ? '<span class="notification-badge" id="notification-badge" aria-label="0 unread notifications" hidden>0</span>' : ""}</button>`).join("")}
         </nav>
@@ -412,7 +418,7 @@ function renderShell() {
       </aside>
       <div class="app-main">
         <header class="topbar">
-          <div class="button-row"><button class="btn btn-secondary btn-small mobile-menu" id="mobile-menu" aria-label="Open navigation">☰</button><h1 id="view-title">AIM</h1></div>
+          <div class="button-row topbar-title-group"><button class="btn btn-secondary btn-small mobile-menu" id="mobile-menu" aria-label="Open navigation">☰</button><span class="topbar-brand">AIM</span><span class="topbar-brand-divider" aria-hidden="true">·</span><h1 id="view-title">AIM</h1></div>
           <div class="topbar-actions"><button class="btn btn-secondary btn-small" id="signout-button">Sign out</button></div>
         </header>
         <main id="main-content" class="content"><div class="loader-inline"><span class="spinner"></span> Loading…</div></main>

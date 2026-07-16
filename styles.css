@@ -577,32 +577,34 @@ tr:last-child td { border-bottom: 0; }
   background: #dde3e8;
 }
 
-/* Subtle, persistent creator credit shown on every application view. */
+/* Subtle creator credit in normal document flow, so it never covers page content. */
 .site-credit {
-  position: fixed;
-  right: clamp(.65rem, 1.5vw, 1.25rem);
-  bottom: clamp(.55rem, 1.2vw, 1rem);
-  z-index: 8;
-  width: clamp(220px, 20vw, 310px);
-  max-width: calc(100vw - 1.25rem);
-  opacity: .58;
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: .35rem clamp(1rem, 3vw, 2.25rem) .9rem;
+  opacity: .56;
   filter: saturate(.78);
   pointer-events: none;
   user-select: none;
-  transition: opacity .2s ease;
 }
 .site-credit img {
   display: block;
-  width: 100%;
+  width: clamp(190px, 18vw, 270px);
+  max-width: 58vw;
   height: auto;
 }
 
 @media (max-width: 720px) {
   .site-credit {
-    width: clamp(185px, 48vw, 225px);
-    right: .45rem;
-    bottom: .4rem;
+    justify-content: center;
+    padding: .3rem .75rem .75rem;
     opacity: .52;
+  }
+  .site-credit img {
+    width: clamp(175px, 48vw, 220px);
+    max-width: 72vw;
   }
 }
 

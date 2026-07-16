@@ -347,6 +347,24 @@ tr:last-child td { border-bottom: 0; }
   gap: 1.25rem 2rem;
   align-items: start;
 }
+
+.site-footer__logo-link {
+  display: inline-block;
+  max-width: 100%;
+}
+.site-footer__logo {
+  display: block;
+  width: min(290px, 100%);
+  height: auto;
+  max-height: 112px;
+  object-fit: contain;
+  object-position: left center;
+  margin: 0 0 .75rem;
+  opacity: .92;
+}
+.site-footer__logo-link:hover .site-footer__logo {
+  opacity: 1;
+}
 .site-footer__eyebrow { margin: 0 0 .3rem; font-size: .8rem; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.6); }
 .site-footer__title { margin: 0 0 .55rem; font-size: 1.3rem; color: #fff; }
 .site-footer__description { margin: 0; line-height: 1.6; color: rgba(255,255,255,.78); }

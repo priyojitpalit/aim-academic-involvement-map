@@ -360,7 +360,10 @@ tr:last-child td { border-bottom: 0; }
   object-fit: contain;
   object-position: left center;
   margin: 0 0 .75rem;
-  opacity: .92;
+  /* Convert every visible part of the navy PNG to white while
+     preserving its transparent background and exact design. */
+  filter: brightness(0) invert(1);
+  opacity: .88;
 }
 .site-footer__logo-link:hover .site-footer__logo {
   opacity: 1;

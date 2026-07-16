@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="13" fill="#3F2784"/>
+  <path d="M13 47h38" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" opacity=".45"/>
+  <text
+    x="32"
+    y="38"
+    text-anchor="middle"
+    font-family="Arial, Helvetica, sans-serif"
+    font-size="21"
+    font-weight="700"
+    letter-spacing=".5"
+    fill="#FFFFFF">AIM</text>
+</svg>

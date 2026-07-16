@@ -576,3 +576,36 @@ tr:last-child td { border-bottom: 0; }
   height: 1px;
   background: #dde3e8;
 }
+
+/* Subtle, persistent creator credit shown on every application view. */
+.site-credit {
+  position: fixed;
+  right: clamp(.65rem, 1.5vw, 1.25rem);
+  bottom: clamp(.55rem, 1.2vw, 1rem);
+  z-index: 8;
+  width: clamp(220px, 20vw, 310px);
+  max-width: calc(100vw - 1.25rem);
+  opacity: .58;
+  filter: saturate(.78);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity .2s ease;
+}
+.site-credit img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 720px) {
+  .site-credit {
+    width: clamp(185px, 48vw, 225px);
+    right: .45rem;
+    bottom: .4rem;
+    opacity: .52;
+  }
+}
+
+@media print {
+  .site-credit { display: none !important; }
+}

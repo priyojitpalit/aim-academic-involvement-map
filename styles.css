@@ -75,7 +75,7 @@ a { color: var(--brand-2); }
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
   overflow: hidden;
-  background: url('./assets/aim-login-background-purple-outline.png') left center / cover no-repeat;
+  background: url('./assets/aim-login-background.png') left center / cover no-repeat;
 }
 .auth-brand {
   position: relative;
@@ -764,7 +764,7 @@ tr:last-child td { border-bottom: 0; }
   .auth-brand {
     min-height: clamp(500px, 78vw, 640px);
     background-color: #f5f2fb;
-    background-image: url('./assets/aim-login-background-purple-outline.png');
+    background-image: url('./assets/aim-login-background.png');
     background-repeat: no-repeat;
     background-size: 100% auto;
     background-position: center bottom;
@@ -822,7 +822,7 @@ tr:last-child td { border-bottom: 0; }
 
 .auth-brand {
   background:
-    url('./assets/aim-login-background-purple-outline.png') center center / cover no-repeat !important;
+    url('./assets/aim-login-background.png') center center / cover no-repeat !important;
   min-height: 610px !important;
 }
 
@@ -871,5 +871,27 @@ tr:last-child td { border-bottom: 0; }
     width: min(20rem, 100%) !important;
     max-width: 20rem !important;
     background: rgba(255,255,255,.52) !important;
+  }
+}
+
+
+/* Simple SHC journey illustration */
+.auth-brand {
+  background-position: center center !important;
+  background-size: cover !important;
+}
+
+@media (max-width: 920px) {
+  .auth-brand {
+    min-height: clamp(500px, 105vw, 660px) !important;
+    background-position: center top !important;
+    background-size: cover !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-brand {
+    min-height: 560px !important;
+    background-position: center top !important;
   }
 }

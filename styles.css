@@ -838,9 +838,9 @@ tr:last-child td { border-bottom: 0; }
 
 .brand-lockup {
   background: rgba(255,255,255,.34) !important;
-  border-color: rgba(255,255,255,.01) !important;
+  border-color: rgba(255,255,255,.00) !important;
   box-shadow: 0 14px 38px rgba(37,30,66,.08) !important;
-  backdrop-filter: blur(1px) !important;
+  backdrop-filter: blur(0px) !important;
 }
 
 @media (max-width: 920px) {

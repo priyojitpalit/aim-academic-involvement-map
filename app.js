@@ -509,6 +509,7 @@ function navItemsForRole(role) {
   }
   return [
     { view: "admin", label: "Admin Dashboard", icon: sidebarIcon("dashboard") },
+    { view: "advisees", label: "My Advisees", icon: sidebarIcon("advisors") },
     { view: "plans", label: "All Student Plans", icon: sidebarIcon("map") },
     { view: "users", label: "Manage Users", icon: sidebarIcon("users") },
     { view: "relationships", label: "Relationships", icon: sidebarIcon("relationships") },
@@ -543,7 +544,14 @@ async function navigate(view, options = {}) {
     else if (view === "documents") await renderDocuments(options.studentUid || state.user.uid, { backView: options.backView });
     else if (view === "advisors") await renderAdvisors();
     else if (view === "advisees") await renderAdvisees();
-    else if (view === "studentPlan") await renderStudentPlan(options.studentUid || state.currentStudentUid, { editable: state.profile.role === "admin", backView: options.backView });
+    else if (view === "studentPlan") {
+      const advisorMode = options.backView === "advisees";
+      await renderStudentPlan(options.studentUid || state.currentStudentUid, {
+        editable: state.profile.role === "admin" && !advisorMode,
+        backView: options.backView,
+        advisorMode
+      });
+    }
     else if (view === "notifications") await renderNotifications();
     else if (view === "profile") await renderProfile();
     else if (view === "admin") await renderAdminDashboard();
@@ -597,7 +605,7 @@ async function renderStudentPlan(studentUid, options = {}) {
       <button class="btn btn-secondary btn-small" id="open-plan-documents" type="button">${studentUid === state.user.uid ? "Manage" : "View"}</button></div>
       ${documents.length ? compactDocumentListHtml(documents) : '<p class="subtle">No document links have been added yet.</p>'}
     </section>
-    ${canEdit ? `<div id="map-form" class="aim-map-form"><div class="map-toolbar"><span class="map-status" id="map-status">${useLocalDraft ? "Recovered recent changes" : planSnap.exists() ? `Saved ${formatDate(cloudPlan.updatedAt)}` : "Not saved yet"}</span><button class="btn btn-primary" id="map-save-now" type="button">Save now</button></div>${timelineHtml(plan.stages || {}, plan.stageUpdatedAt || {}, comments, true, canComment, studentUid)}</div>` : timelineHtml(plan.stages || {}, plan.stageUpdatedAt || {}, comments, false, canComment, studentUid)}
+    ${canEdit ? `<div id="map-form" class="aim-map-form"><div class="map-toolbar"><span class="map-status" id="map-status">${useLocalDraft ? "Recovered recent changes" : planSnap.exists() ? `Saved ${formatDate(cloudPlan.updatedAt)}` : "Not saved yet"}</span><button class="btn btn-primary" id="map-save-now" type="button">Save now</button></div>${timelineHtml(plan.stages || {}, plan.stageUpdatedAt || {}, comments, true, canComment, studentUid, options.advisorMode === true)}</div>` : timelineHtml(plan.stages || {}, plan.stageUpdatedAt || {}, comments, false, canComment, studentUid, options.advisorMode === true)}
   `;
 
   document.getElementById("print-plan-button").addEventListener("click", printAimPlan);
@@ -800,7 +808,7 @@ function printAimPlan() {
 }
 
 
-function timelineHtml(stages, stageUpdatedAt, comments, editable, canComment, studentUid) {
+function timelineHtml(stages, stageUpdatedAt, comments, editable, canComment, studentUid, advisorMode = false) {
   let latestStartedIndex = -1;
   STAGES.forEach((stage, index) => {
     const value = normalizeStageData(stage, stages[stage.key] || {});
@@ -836,7 +844,7 @@ function timelineHtml(stages, stageUpdatedAt, comments, editable, canComment, st
         </summary>
         <div class="stage-body">
           ${fieldsHtml}
-          ${(sectionComments.length || canComment) ? `<div class="comment-block"><strong>Advisor comments</strong>${sectionComments.length ? sectionComments.map(commentHtml).join("") : '<p class="subtle">No comments yet.</p>'}${canComment ? `<form class="comment-form" data-section="${stage.key}"><div class="field"><label class="sr-only" for="comment-${stage.key}">Comment on ${escapeHtml(stage.title)}</label><textarea id="comment-${stage.key}" maxlength="2000" placeholder="Add guidance for this section…" required></textarea></div><button class="btn btn-soft btn-small" type="submit">Add comment</button></form>` : ""}</div>` : ""}
+          ${(sectionComments.length || canComment) ? `<div class="comment-block"><strong>Advisor comments</strong>${sectionComments.length ? sectionComments.map((comment) => commentHtml(comment, advisorMode)).join("") : '<p class="subtle">No comments yet.</p>'}${canComment ? `<form class="comment-form" data-section="${stage.key}"><div class="field"><label class="sr-only" for="comment-${stage.key}">Comment on ${escapeHtml(stage.title)}</label><textarea id="comment-${stage.key}" maxlength="2000" placeholder="Add guidance for this section…" required></textarea></div><button class="btn btn-soft btn-small" type="submit">Add comment</button></form>` : ""}</div>` : ""}
         </div>
       </details>
     </section>`;
@@ -924,8 +932,8 @@ function readSection(title, text, extraClass = "") {
   return `<div class="stage-read-section ${escapeAttr(extraClass)}"><h4>${escapeHtml(title)}</h4><p class="${text ? "" : "blank"}">${text ? escapeHtml(text) : "Nothing added yet."}</p></div>`;
 }
 
-function commentHtml(comment) {
-  const canDelete = state.profile?.role === "admin" || comment.authorUid === state.user?.uid;
+function commentHtml(comment, advisorMode = false) {
+  const canDelete = comment.authorUid === state.user?.uid || (state.profile?.role === "admin" && !advisorMode);
   return `<div class="comment"><div class="comment-head"><strong>${escapeHtml(comment.authorName || "Advisor")}</strong><span>${formatDate(comment.createdAt)}</span></div><p>${escapeHtml(comment.text)}</p>${canDelete ? `<div class="button-row" style="margin-top:.55rem"><button class="btn btn-danger btn-small" type="button" data-delete-comment="${escapeAttr(comment.id)}">Delete</button></div>` : ""}</div>`;
 }
 
@@ -964,7 +972,7 @@ function attachCommentHandlers(studentUid, student, options) {
         await recordAudit("comment_added", { studentUid, targetUid: studentUid, targetEmail: student.email, summary: `${state.profile.displayName} commented on ${stageTitle(form.dataset.section)}.` });
         // A notification failure must not make a successfully saved comment
         // appear to have failed.
-        await notifyComment(student, form.dataset.section).catch((error) => {
+        await notifyComment(student, form.dataset.section, options.advisorMode === true).catch((error) => {
           console.warn("Comment notification skipped", error);
         });
         toast("Comment added.", "success");
@@ -990,7 +998,7 @@ async function renderDocuments(studentUid, options = {}) {
   if (!studentSnap.exists() || studentSnap.data().role !== "student") throw new Error("The selected student does not exist.");
   const student = { id: studentSnap.id, ...studentSnap.data() };
   const items = docsSnap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
-  const canManage = studentUid === state.user.uid || state.profile.role === "admin";
+  const canManage = studentUid === state.user.uid || (state.profile.role === "admin" && options.backView !== "advisees");
   const isOwnDocuments = studentUid === state.user.uid;
 
   document.getElementById("main-content").innerHTML = `
@@ -1069,8 +1077,8 @@ async function renderAdvisors() {
   const advisors = (await Promise.all(active.map(async (relationship) => ({ relationship, person: await getUser(relationship.facultyUid) })))).filter((item) => item.person);
 
   document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>My Advisors</h2></div></div>
-    <div class="grid grid-2"><section class="panel"><h3>Current advisors</h3><div class="people-list">${advisors.length ? advisors.map(({ relationship, person }) => personCardHtml(person, "advisor", { request: requests.get(relationship.id) })).join("") : emptyStateHtml("No advisors yet", "Choose an advisor from the faculty directory or enter an email address.")}</div></section>
-    <section class="panel"><h3>Add an advisor</h3><form id="advisor-email-form" class="form-stack"><div class="field"><label for="advisor-email">Faculty email</label><input id="advisor-email" type="email" list="advisor-directory" required><datalist id="advisor-directory">${(await getUsersByRole("faculty")).map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><button class="btn btn-primary" type="submit">Add advisor</button></form></section></div>`;
+    <div class="grid grid-2"><section class="panel"><h3>Current advisors</h3><div class="people-list">${advisors.length ? advisors.map(({ relationship, person }) => personCardHtml(person, "advisor", { request: requests.get(relationship.id) })).join("") : emptyStateHtml("No advisors yet", "Choose an advisor from the directory or enter an email address.")}</div></section>
+    <section class="panel"><h3>Add an advisor</h3><form id="advisor-email-form" class="form-stack"><div class="field"><label for="advisor-email">Advisor email</label><input id="advisor-email" type="email" list="advisor-directory" required><datalist id="advisor-directory">${(await getAdvisorUsers()).map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><button class="btn btn-primary" type="submit">Add advisor</button></form></section></div>`;
 
   document.getElementById("advisor-email-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1164,7 +1172,7 @@ async function addAdvisorByEmail(email) {
   if (!isValidEmail(email)) throw new Error("Enter a valid email address.");
   const faculty = await findUserByEmail(email);
   if (faculty) {
-    if (faculty.role !== "faculty" || !faculty.approved || faculty.status !== "active") throw new Error("That account is not an active faculty account.");
+    if (!["faculty", "admin"].includes(faculty.role) || !faculty.approved || faculty.status !== "active") throw new Error("That account is not an active advisor account.");
     await createRelationship(state.user.uid, faculty.id, "student");
     return;
   }
@@ -1177,17 +1185,17 @@ async function addAdviseeByEmail(email) {
   const student = await findUserByEmail(email);
   if (student) {
     if (student.role !== "student" || !student.approved || student.status !== "active") throw new Error("That account is not an active student account.");
-    await createRelationship(student.id, state.user.uid, "faculty");
+    await createRelationship(student.id, state.user.uid, state.profile.role);
     return;
   }
-  await createRelationshipInvite({ studentEmail: email, facultyEmail: state.profile.email, initiatedByRole: "faculty" });
+  await createRelationshipInvite({ studentEmail: email, facultyEmail: state.profile.email, initiatedByRole: state.profile.role });
   await recordAudit("relationship_invited", { facultyUid: state.user.uid, targetEmail: email, summary: `${state.profile.displayName} added an unregistered student email.` });
 }
 
 async function createRelationship(studentUid, facultyUid, initiatedByRole) {
   const [student, faculty] = await Promise.all([getUser(studentUid), getUser(facultyUid)]);
   if (!student || student.role !== "student") throw new Error("A valid student account is required.");
-  if (!faculty || faculty.role !== "faculty") throw new Error("A valid faculty account is required.");
+  if (!faculty || !["faculty", "admin"].includes(faculty.role)) throw new Error("A valid advisor account is required.");
 
   const id = relationshipId(studentUid, facultyUid);
   const relationshipRef = doc(db, "relationships", id);
@@ -1260,14 +1268,14 @@ async function createRelationshipInvite({ studentEmail, facultyEmail, initiatedB
 }
 
 async function claimPendingInvites() {
-  if (!state.profile?.approved || !["student", "faculty"].includes(state.profile.role)) return;
+  if (!state.profile?.approved || !["student", "faculty", "admin"].includes(state.profile.role)) return;
   const field = state.profile.role === "student" ? "studentEmail" : "facultyEmail";
   const snaps = await getDocs(query(collection(db, "relationshipInvites"), where(field, "==", state.profile.email)));
   for (const inviteDoc of snaps.docs) {
     const invite = inviteDoc.data();
     if (invite.status !== "pending") continue;
     const [student, faculty] = await Promise.all([findUserByEmail(invite.studentEmail), findUserByEmail(invite.facultyEmail)]);
-    if (!student || !faculty || student.role !== "student" || faculty.role !== "faculty") continue;
+    if (!student || !faculty || student.role !== "student" || !["faculty", "admin"].includes(faculty.role)) continue;
     await createRelationship(student.id, faculty.id, invite.initiatedByRole || state.profile.role);
     await updateDoc(inviteDoc.ref, { status: "claimed", claimedAt: serverTimestamp(), claimedByUid: state.user.uid, updatedAt: serverTimestamp() });
   }
@@ -1301,11 +1309,11 @@ async function notifyPlanChange(student, changedSections) {
   }, `plan-${recipientUid}-${state.user.uid}-${student.id}-${dateKey(new Date())}`)));
 }
 
-async function notifyComment(student, sectionKey) {
+async function notifyComment(student, sectionKey, advisorMode = false) {
   // Faculty members are allowed to see their own relationship with a student,
   // but not the student's complete advisor list. Avoid querying every advisor
   // when a faculty member leaves a comment.
-  if (state.profile.role === "faculty") {
+  if (state.profile.role === "faculty" || advisorMode) {
     return addNotification({
       recipientUid: student.id,
       senderUid: state.user.uid,
@@ -1677,12 +1685,12 @@ function bindUserTableActions() {
 
 async function renderAdminRelationships() {
   requireAdmin();
-  const [relationshipSnap, requestSnap, inviteSnap, students, faculty] = await Promise.all([
+  const [relationshipSnap, requestSnap, inviteSnap, students, advisors] = await Promise.all([
     getDocs(collection(db, "relationships")),
     getDocs(collection(db, "relationshipRemovalRequests")),
     getDocs(collection(db, "relationshipInvites")),
     getUsersByRole("student"),
-    getUsersByRole("faculty")
+    getAdvisorUsers()
   ]);
   const relationships = relationshipSnap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
   const requests = new Map(requestSnap.docs.map((item) => [item.data().relationshipId || item.id, { id: item.id, ...item.data() }]));
@@ -1690,9 +1698,9 @@ async function renderAdminRelationships() {
   const pendingCount = Array.from(requests.values()).filter((item) => item.status === "pending").length;
 
   document.getElementById("main-content").innerHTML = `<div class="page-head"><div><h2>Advisor Relationships</h2></div><span class="pill ${pendingCount ? "pill-pending" : "pill-active"}">${pendingCount} removal request${pendingCount === 1 ? "" : "s"} pending</span></div>
-    <section class="panel" style="margin-bottom:1rem"><h3>Add Student–Advisor Relationship</h3><form id="admin-relationship-form" class="grid grid-3"><div class="field"><label for="admin-student-email">Student email</label><input id="admin-student-email" type="email" list="admin-student-list" placeholder="student@email.shc.edu" required><datalist id="admin-student-list">${students.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field"><label for="admin-faculty-email">Advisor email</label><input id="admin-faculty-email" type="email" list="admin-faculty-list" placeholder="advisor@shc.edu" required><datalist id="admin-faculty-list">${faculty.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Create relationship</button></div></form></section>
+    <section class="panel" style="margin-bottom:1rem"><h3>Add Student–Advisor Relationship</h3><form id="admin-relationship-form" class="grid grid-3"><div class="field"><label for="admin-student-email">Student email</label><input id="admin-student-email" type="email" list="admin-student-list" placeholder="student@email.shc.edu" required><datalist id="admin-student-list">${students.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}</option>`).join("")}</datalist></div><div class="field"><label for="admin-faculty-email">Advisor email</label><input id="admin-faculty-email" type="email" list="admin-faculty-list" placeholder="advisor@shc.edu" required><datalist id="admin-faculty-list">${advisors.map((item) => `<option value="${escapeAttr(item.email)}">${escapeHtml(item.displayName)}${item.role === "admin" ? " (Administrator)" : ""}</option>`).join("")}</datalist></div><div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Create relationship</button></div></form></section>
     ${pendingInvites.length ? `<section class="panel" style="margin-bottom:1rem"><div class="panel-head"><h3>Pending unregistered connections</h3><span class="subtle">${pendingInvites.length}</span></div><div class="table-wrap"><table><thead><tr><th>Student email</th><th>Advisor email</th><th>Created</th><th>Action</th></tr></thead><tbody>${pendingInvites.map((item) => `<tr><td>${escapeHtml(item.studentEmail)}</td><td>${escapeHtml(item.facultyEmail)}</td><td>${formatDate(item.createdAt)}</td><td><button class="btn btn-danger btn-small" data-cancel-invite="${item.id}">Cancel</button></td></tr>`).join("")}</tbody></table></div></section>` : ""}
-    <div class="table-wrap"><table><thead><tr><th>Student</th><th>Faculty</th><th>Status</th><th>Removal request</th><th>Actions</th></tr></thead><tbody>${relationships.length ? relationships.map((item) => relationshipRowHtml(item, requests.get(item.id))).join("") : '<tr><td colspan="5" class="subtle">No relationships yet.</td></tr>'}</tbody></table></div>`;
+    <div class="table-wrap"><table><thead><tr><th>Student</th><th>Advisor</th><th>Status</th><th>Removal request</th><th>Actions</th></tr></thead><tbody>${relationships.length ? relationships.map((item) => relationshipRowHtml(item, requests.get(item.id))).join("") : '<tr><td colspan="5" class="subtle">No relationships yet.</td></tr>'}</tbody></table></div>`;
 
   document.getElementById("admin-relationship-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1704,7 +1712,7 @@ async function renderAdminRelationships() {
       if (!isValidEmail(studentEmail) || !isValidEmail(facultyEmail)) throw new Error("Enter valid student and advisor email addresses.");
       let [student, advisor] = await Promise.all([findUserByEmail(studentEmail, { includeInactive: true }), findUserByEmail(facultyEmail, { includeInactive: true })]);
       if (student && student.role !== "student") throw new Error(`${studentEmail} is registered but is not assigned as a student.`);
-      if (advisor && advisor.role !== "faculty") throw new Error(`${facultyEmail} is registered but is not assigned as faculty.`);
+      if (advisor && !["faculty", "admin"].includes(advisor.role)) throw new Error(`${facultyEmail} is registered but is not assigned as an advisor.`);
       if (!student) await preapproveEmail(studentEmail, "student");
       if (!advisor) await preapproveEmail(facultyEmail, "faculty");
       if (student && advisor) {
@@ -1793,6 +1801,14 @@ async function recordAudit(action, details = {}) {
 
 function requireAdmin() {
   if (state.profile.role !== "admin") throw new Error("Administrator access is required.");
+}
+
+async function getAdvisorUsers() {
+  const [faculty, admins] = await Promise.all([
+    getUsersByRole("faculty"),
+    getUsersByRole("admin")
+  ]);
+  return [...faculty, ...admins].sort((a, b) => (a.displayName || "").localeCompare(b.displayName || ""));
 }
 
 async function getUsersByRole(role) {

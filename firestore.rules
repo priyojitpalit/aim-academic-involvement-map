@@ -93,6 +93,11 @@ service cloud.firestore {
         && userData(uid).role == expectedRole;
     }
 
+    function isAdvisorUser(uid) {
+      return isActiveUser(uid)
+        && userData(uid).role in ['faculty', 'admin'];
+    }
+
     function relationshipPath(studentUid, facultyUid) {
       return /databases/$(database)/documents/relationships/$(studentUid + '__' + facultyUid);
     }
@@ -133,12 +138,12 @@ service cloud.firestore {
         && stage.keys().hasAll([
           'academic', 'involvement', 'highImpact', 'career',
           'summerPlan', 'careerExperience', 'academicProgress', 'serviceTravel',
-          'destination', 'preparation'
+          'destination', 'preparation', 'reflection'
         ])
         && stage.keys().hasOnly([
           'academic', 'involvement', 'highImpact', 'career',
           'summerPlan', 'careerExperience', 'academicProgress', 'serviceTravel',
-          'destination', 'preparation'
+          'destination', 'preparation', 'reflection'
         ])
         && stage.academic is string && stage.academic.size() <= 4000
         && stage.involvement is string && stage.involvement.size() <= 4000
@@ -149,7 +154,8 @@ service cloud.firestore {
         && stage.academicProgress is string && stage.academicProgress.size() <= 4000
         && stage.serviceTravel is string && stage.serviceTravel.size() <= 4000
         && stage.destination is string && stage.destination.size() <= 4000
-        && stage.preparation is string && stage.preparation.size() <= 4000;
+        && stage.preparation is string && stage.preparation.size() <= 4000
+        && stage.reflection is string && stage.reflection.size() <= 4000;
     }
 
     function validStages(stages) {
@@ -170,6 +176,22 @@ service cloud.firestore {
         && validStage(stages.summer3)
         && validStage(stages.senior)
         && validStage(stages.graduation);
+    }
+
+    function validStageUpdatedAt(value) {
+      return value is map
+        && value.keys().hasOnly([
+          'freshman', 'summer1', 'sophomore', 'summer2',
+          'junior', 'summer3', 'senior', 'graduation'
+        ])
+        && (!value.keys().hasAny(['freshman']) || value.freshman is int)
+        && (!value.keys().hasAny(['summer1']) || value.summer1 is int)
+        && (!value.keys().hasAny(['sophomore']) || value.sophomore is int)
+        && (!value.keys().hasAny(['summer2']) || value.summer2 is int)
+        && (!value.keys().hasAny(['junior']) || value.junior is int)
+        && (!value.keys().hasAny(['summer3']) || value.summer3 is int)
+        && (!value.keys().hasAny(['senior']) || value.senior is int)
+        && (!value.keys().hasAny(['graduation']) || value.graduation is int);
     }
 
     function canReadPlan(studentUid) {
@@ -336,18 +358,20 @@ service cloud.firestore {
         && request.resource.data.studentUid == studentUid
         && request.resource.data.keys().hasOnly([
           'studentUid', 'studentName', 'studentEmail', 'stages',
-          'updatedAt', 'updatedByUid'
+          'stageUpdatedAt', 'updatedAt', 'updatedByUid'
         ])
-        && validStages(request.resource.data.stages);
+        && validStages(request.resource.data.stages)
+        && validStageUpdatedAt(request.resource.data.stageUpdatedAt);
 
       allow update: if ((isStudent() && request.auth.uid == studentUid) || isAdmin())
         && request.resource.data.studentUid == studentUid
         && resource.data.studentUid == studentUid
         && request.resource.data.keys().hasOnly([
           'studentUid', 'studentName', 'studentEmail', 'stages',
-          'updatedAt', 'updatedByUid'
+          'stageUpdatedAt', 'updatedAt', 'updatedByUid'
         ])
-        && validStages(request.resource.data.stages);
+        && validStages(request.resource.data.stages)
+        && validStageUpdatedAt(request.resource.data.stageUpdatedAt);
 
       allow delete: if isAdmin();
 
@@ -409,7 +433,7 @@ service cloud.firestore {
         && request.resource.data.studentEmail == userData(request.resource.data.studentUid).email
         && request.resource.data.facultyEmail == userData(request.resource.data.facultyUid).email
         && isActiveRole(request.resource.data.studentUid, 'student')
-        && isActiveRole(request.resource.data.facultyUid, 'faculty')
+        && isAdvisorUser(request.resource.data.facultyUid)
         && request.resource.data.initiatedByUid == request.auth.uid
         && (
           isAdmin()

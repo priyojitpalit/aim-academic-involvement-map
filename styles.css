@@ -902,3 +902,18 @@ tr:last-child td { border-bottom: 0; }
     background-position: center top !important;
   }
 }
+
+
+/* SHC purple palette — final overrides */
+.sidebar {
+  background: #3D1951 !important;
+}
+
+.nav-button:hover,
+.nav-button.active {
+  background: rgba(255,255,255,.13) !important;
+}
+
+.timeline-road path {
+  stroke: #806A89 !important;
+}

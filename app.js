@@ -576,13 +576,14 @@ async function renderStudentPlan(studentUid, options = {}) {
       <div class="button-row"><button class="btn btn-secondary" id="print-plan-button" type="button">Print / Save as PDF</button>${options.backView ? '<button class="btn btn-secondary" id="back-from-plan">← Back</button>' : ""}</div>
     </div>
     ${useLocalDraft ? '<div class="status-banner testing"><strong>Recovered work:</strong> Your recent changes were restored and will save automatically.</div>' : ""}
+    <div class="map-intro-note">Plan ahead during each stage. At the end of the academic year or summer, return to record what you actually did and reflect on what you learned.</div>
     ${aimGuideHtml()}
     <section class="panel plan-documents-summary">
       <div class="panel-head"><div><h3>Portfolio &amp; documents</h3></div>
       <button class="btn btn-secondary btn-small" id="open-plan-documents" type="button">${studentUid === state.user.uid ? "Manage" : "View"}</button></div>
       ${documents.length ? compactDocumentListHtml(documents) : '<p class="subtle">No document links have been added yet.</p>'}
     </section>
-    ${canEdit ? `<div id="map-form" class="aim-map-form"><div class="map-toolbar"><span class="map-status" id="map-status">${useLocalDraft ? "Recovered recent changes" : planSnap.exists() ? `Saved ${formatDate(cloudPlan.updatedAt)}` : "Not saved yet"}</span><button class="btn btn-primary" id="map-save-now" type="button">Save now</button></div>${timelineHtml(plan.stages || {}, comments, true, canComment, studentUid)}</div>` : timelineHtml(plan.stages || {}, comments, false, canComment, studentUid)}
+    ${canEdit ? `<div id="map-form" class="aim-map-form"><div class="map-toolbar"><span class="map-status" id="map-status">${useLocalDraft ? "Recovered recent changes" : planSnap.exists() ? `Saved ${formatDate(cloudPlan.updatedAt)}` : "Not saved yet"}</span><button class="btn btn-primary" id="map-save-now" type="button">Save now</button></div>${timelineHtml(plan.stages || {}, plan.stageUpdatedAt || {}, comments, true, canComment, studentUid)}</div>` : timelineHtml(plan.stages || {}, plan.stageUpdatedAt || {}, comments, false, canComment, studentUid)}
   `;
 
   document.getElementById("print-plan-button").addEventListener("click", printAimPlan);
@@ -600,6 +601,7 @@ function setupAutosave({ studentUid, student, plan }) {
     studentUid,
     student,
     originalStages: normalizeAllStages(plan.stages || {}),
+    stageUpdatedAt: { ...(plan.stageUpdatedAt || {}) },
     dirtySections: new Set(),
     timer: null,
     saving: false
@@ -683,16 +685,25 @@ async function saveCurrentPlan({ reason = "autosave" } = {}) {
   setAutosaveStatus("Saving…", "saving");
   const stages = collectStagesFromForm();
   const changedSections = Array.from(controller.dirtySections);
+  const savedAt = Date.now();
+  const nextStageUpdatedAt = { ...controller.stageUpdatedAt };
+  changedSections.forEach((stageKey) => { nextStageUpdatedAt[stageKey] = savedAt; });
   try {
     await setDoc(doc(db, "plans", controller.studentUid), {
       studentUid: controller.studentUid,
       studentName: controller.student.displayName,
       studentEmail: controller.student.email,
       stages,
+      stageUpdatedAt: nextStageUpdatedAt,
       updatedAt: serverTimestamp(),
       updatedByUid: state.user.uid
     }, { merge: true });
     controller.originalStages = stages;
+    controller.stageUpdatedAt = nextStageUpdatedAt;
+    changedSections.forEach((stageKey) => {
+      const stamp = document.querySelector(`[data-stage-updated="${stageKey}"]`);
+      if (stamp) stamp.textContent = `Last updated ${formatShortDate(savedAt)}`;
+    });
     controller.dirtySections.clear();
     localStorage.removeItem(draftKey(controller.studentUid));
     setAutosaveStatus(`All changes saved${reason === "manual" ? "" : " automatically"}`, "saved");
@@ -735,10 +746,15 @@ function updateStageSummary(stageKey) {
   if (!stageKey) return;
   const details = document.querySelector(`details[data-stage="${stageKey}"]`);
   if (!details) return;
-  const filled = Array.from(details.querySelectorAll("textarea")).filter((item) => item.value.trim()).length;
-  const total = details.querySelectorAll("textarea").length;
+  const planningInputs = Array.from(details.querySelectorAll(".stage-fields .field:not(.reflection-field) textarea"));
+  const planningFilled = planningInputs.filter((item) => item.value.trim()).length;
+  const reflectionDone = Boolean(details.querySelector(".reflection-field textarea")?.value.trim());
   const badge = details.querySelector("[data-stage-progress]");
-  if (badge) badge.textContent = filled ? `${filled}/${total} started` : "Not started";
+  if (badge) badge.textContent = stageProgressText(planningFilled, planningInputs.length, reflectionDone);
+}
+
+function stageProgressText(planningFilled, planningTotal, reflectionDone) {
+  return `${planningFilled}/${planningTotal} planning areas started · ${reflectionDone ? "Reflection completed" : "Reflection pending"}`;
 }
 
 function printAimPlan() {
@@ -765,7 +781,7 @@ function printAimPlan() {
 }
 
 
-function timelineHtml(stages, comments, editable, canComment, studentUid) {
+function timelineHtml(stages, stageUpdatedAt, comments, editable, canComment, studentUid) {
   let latestStartedIndex = -1;
   STAGES.forEach((stage, index) => {
     const value = normalizeStageData(stage, stages[stage.key] || {});
@@ -777,17 +793,28 @@ function timelineHtml(stages, comments, editable, canComment, studentUid) {
   return `<div class="compact-timeline">${STAGES.map((stage, index) => {
     const value = normalizeStageData(stage, stages[stage.key] || {});
     const definitions = stageFieldDefinitions(stage);
+    const planningDefinitions = definitions.filter(([key]) => key !== "reflection");
+    const planningFilled = planningDefinitions.filter(([key]) => String(value[key] || "").trim()).length;
+    const reflectionDone = Boolean(String(value.reflection || "").trim());
     const sectionComments = comments.filter((comment) => comment.sectionKey === stage.key);
-    const filled = definitions.filter(([key]) => String(value[key] || "").trim()).length;
     const indentedClass = stage.type === "summer" || stage.type === "graduation" ? " stage-accordion--transition" : "";
+    const isMostRecent = latestStartedIndex >= 0 && index === latestStartedIndex;
+    const updatedAt = stageUpdatedAt?.[stage.key];
     const fieldsHtml = editable
-      ? `<div class="stage-fields">${definitions.map(([key, label, placeholder]) => textareaField(`${stage.key}-${key}`, label, value[key], placeholder, fieldToneClass(key))).join("")}</div>`
+      ? `<div class="stage-fields">${definitions.map(([key, label, placeholder, helper]) => textareaField(`${stage.key}-${key}`, label, value[key], placeholder, fieldToneClass(key), helper || "")).join("")}</div>`
       : `<div class="stage-read-grid">${definitions.map(([key, label]) => readSection(label, value[key], fieldToneClass(key))).join("")}</div>`;
 
     return `<section class="compact-stage" style="--stage-color:${stage.color}">
       <div class="compact-stage-marker"><span>${index + 1}</span></div>
       <details class="stage-card stage-accordion${indentedClass}" data-stage="${stage.key}" ${index === openIndex ? "open" : ""}>
-        <summary><span class="stage-summary-title">${escapeHtml(stage.title)}</span><span class="stage-progress" data-stage-progress>${filled ? `${filled}/${definitions.length} started` : "Not started"}</span><span class="stage-chevron" aria-hidden="true">⌄</span></summary>
+        <summary>
+          <span class="stage-title-group">
+            <span class="stage-title-line"><span class="stage-summary-title">${escapeHtml(stage.title)}</span>${isMostRecent ? '<span class="stage-latest-badge">Most recent</span>' : ""}</span>
+            <small class="stage-last-updated" data-stage-updated="${stage.key}">${updatedAt ? `Last updated ${escapeHtml(formatShortDate(updatedAt))}` : ""}</small>
+          </span>
+          <span class="stage-progress" data-stage-progress>${stageProgressText(planningFilled, planningDefinitions.length, reflectionDone)}</span>
+          <span class="stage-chevron" aria-hidden="true">⌄</span>
+        </summary>
         <div class="stage-body">
           ${fieldsHtml}
           ${(sectionComments.length || canComment) ? `<div class="comment-block"><strong>Advisor comments</strong>${sectionComments.length ? sectionComments.map(commentHtml).join("") : '<p class="subtle">No comments yet.</p>'}${canComment ? `<form class="comment-form" data-section="${stage.key}"><div class="field"><label class="sr-only" for="comment-${stage.key}">Comment on ${escapeHtml(stage.title)}</label><textarea id="comment-${stage.key}" maxlength="2000" placeholder="Add guidance for this section…" required></textarea></div><button class="btn btn-soft btn-small" type="submit">Add comment</button></form>` : ""}</div>` : ""}
@@ -799,46 +826,46 @@ function timelineHtml(stages, comments, editable, canComment, studentUid) {
 
 function aimGuideHtml() {
   return `<details class="aim-guide panel" open><summary>Planning guide and examples</summary><div class="guide-grid">
-    <div class="tone-impact"><h3>High-impact experiences</h3><p>Study abroad, internship, service immersion, or undergraduate research—often planned for the sophomore or junior year.</p></div>
-    <div class="tone-involvement"><h3>Campus involvement</h3><p>Try a club, set a leadership goal, or prepare to apply for a campus leadership role.</p></div>
-    <div class="tone-academic"><h3>Academic goals</h3><p>Maintain or raise GPA, build a mentoring relationship, use tutoring, participate in class, make the Dean's List, and plan the senior capstone.</p></div>
-    <div class="tone-career"><h3>Career preparation</h3><p>Build your résumé and professional network, connect with Career Services, explore internships and job shadowing, practice interviewing, and prepare for employment or graduate school.</p></div>
-    <div class="guide-summer tone-summer"><h3>Summer planning</h3><p>Use all three summers intentionally for employment, internships, job shadowing, volunteering, summer school, travel, or other professional development.</p></div>
+    <div class="tone-impact"><h3>High-Impact Experiences</h3><p>Study abroad, internship, service immersion, or undergraduate research—often planned for the sophomore or junior year.</p></div>
+    <div class="tone-involvement"><h3>Campus Involvement &amp; Leadership</h3><p>Try a club, set a leadership goal, or prepare to apply for a campus leadership role.</p></div>
+    <div class="tone-academic"><h3>Academic Goals</h3><p>Maintain or raise GPA, build a mentoring relationship, use tutoring, participate in class, make the Dean's List, and plan the senior capstone.</p></div>
+    <div class="tone-career"><h3>Career Preparation</h3><p>Build your résumé and professional network, connect with Career Services, explore internships and job shadowing, practice interviewing, and prepare for employment or graduate school.</p></div>
+    <div class="guide-summer tone-summer"><h3>Summer Planning</h3><p>Use all three summers intentionally for employment, internships, job shadowing, volunteering, summer school, travel, or other professional development.</p></div>
   </div></details>`;
 }
 
 function stageFieldDefinitions(stage) {
   if (stage.type === "summer") {
     return [
-      ["summerPlan", "Main summer plan", "What do you plan to do this summer?"],
-      ["careerExperience", "Career-related experience", "Employment, internship, job shadowing, volunteering, or professional development…"],
-      ["academicProgress", "Academic progress", "Summer school, degree progress, skill-building, or PTH 205 preparation…"],
-      ["serviceTravel", "Service and/or travel", "Service, community work, travel, or another meaningful summer experience…"],
-      ["reflection", "Summer reflection", "Looking back on the summer, what did you do, what did you learn, and what will you carry forward?"]
+      ["summerPlan", "Main Summer Plan", "What do you plan to do this summer?"],
+      ["careerExperience", "Career-Related Experience", "Employment, internship, job shadowing, volunteering, or professional development…"],
+      ["academicProgress", "Academic Progress", "Summer school, degree progress, skill-building, or PTH 205 preparation…"],
+      ["serviceTravel", "Service and/or Travel", "Service, community work, travel, or another meaningful summer experience…"],
+      ["reflection", "Summer Reflection", "What did you do this summer? What did you learn? What would you continue or change going forward?", "Complete at the end of the summer."]
     ];
   }
   if (stage.type === "graduation") {
     return [
-      ["destination", "Primary destination", "Job, graduate school, service program, or another post-graduation goal…"],
-      ["preparation", "Preparation and next actions", "Applications, references, interviews, portfolio, entrance exams, financial planning…"],
-      ["reflection", "Where you're headed", "Where are you headed next, and what is your plan for the transition?"]
+      ["destination", "Primary Destination", "Job, graduate school, service program, or another post-graduation goal…"],
+      ["preparation", "Preparation and Next Actions", "Applications, references, interviews, portfolio, entrance exams, financial planning…"],
+      ["reflection", "Where You’re Headed", "Where are you headed next, and what are your immediate next steps?", "Complete once your next step is clear."]
     ];
   }
   if (stage.key === "senior") {
     return [
-      ["academic", "Academic goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
-      ["involvement", "Campus involvement & leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
-      ["highImpact", "High-impact experience", "Study abroad, internship, service immersion, or undergraduate research…"],
-      ["career", "Career preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
-      ["reflection", "Preparation for next steps", "As senior year ends, what have you done to prepare for employment, graduate school, service, or another next step?"]
+      ["academic", "Academic Goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
+      ["involvement", "Campus Involvement & Leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
+      ["highImpact", "High-Impact Experiences", "Study abroad, internship, service immersion, or undergraduate research…"],
+      ["career", "Career Preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
+      ["reflection", "Preparation for Next Steps", "What have you done to prepare for your next step, and what still needs to happen?", "Complete near the end of senior year."]
     ];
   }
   return [
-    ["academic", "Academic goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
-    ["involvement", "Campus involvement & leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
-    ["highImpact", "High-impact experience", "Study abroad, internship, service immersion, or undergraduate research…"],
-    ["career", "Career preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
-    ["reflection", "Reflection", "Looking back on this stage, what did you do, what did you learn, and what will you carry forward?"]
+    ["academic", "Academic Goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
+    ["involvement", "Campus Involvement & Leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
+    ["highImpact", "High-Impact Experiences", "Study abroad, internship, service immersion, or undergraduate research…"],
+    ["career", "Career Preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
+    ["reflection", "End-of-Year Reflection", "What did you do? What did you learn? What would you continue or change going forward?", "Complete at the end of the academic year."]
   ];
 }
 
@@ -870,8 +897,8 @@ function fieldToneClass(key) {
   return "";
 }
 
-function textareaField(name, label, value = "", placeholder = "", extraClass = "") {
-  return `<div class="field ${escapeAttr(extraClass)}"><label for="${name}">${escapeHtml(label)}</label><textarea id="${name}" name="${name}" maxlength="4000" placeholder="${escapeAttr(placeholder)}">${escapeHtml(value || "")}</textarea></div>`;
+function textareaField(name, label, value = "", placeholder = "", extraClass = "", helper = "") {
+  return `<div class="field ${escapeAttr(extraClass)}"><label for="${name}">${escapeHtml(label)}</label>${helper ? `<small class="field-helper">${escapeHtml(helper)}</small>` : ""}<textarea id="${name}" name="${name}" maxlength="4000" placeholder="${escapeAttr(placeholder)}">${escapeHtml(value || "")}</textarea></div>`;
 }
 
 function readSection(title, text, extraClass = "") {
@@ -945,23 +972,36 @@ async function renderDocuments(studentUid, options = {}) {
   const student = { id: studentSnap.id, ...studentSnap.data() };
   const items = docsSnap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
   const canManage = studentUid === state.user.uid || state.profile.role === "admin";
+  const isOwnDocuments = studentUid === state.user.uid;
 
   document.getElementById("main-content").innerHTML = `
-    <div class="page-head"><div><h2>${studentUid === state.user.uid ? "My Documents" : `${escapeHtml(student.displayName)}'s Documents`}</h2></div>${options.backView ? '<button class="btn btn-secondary" id="documents-back">← Back</button>' : ""}</div>
-    <div class="status-banner official"><strong>Shareable links:</strong> Make sure each advisor has permission to open the linked file.</div>
-    ${canManage ? `<section class="panel"><h3>Add a document link</h3><form id="document-link-form" class="grid grid-3">
+    <div class="page-head"><div><h2>${isOwnDocuments ? "My Documents" : `${escapeHtml(student.displayName)}'s Documents`}</h2>${isOwnDocuments ? '<p>Keep useful academic and career documents connected to your AIM map.</p>' : ""}</div>${options.backView ? '<button class="btn btn-secondary" id="documents-back">← Back</button>' : ""}</div>
+    ${isOwnDocuments ? `<section class="panel document-howto">
+      <div class="document-howto-head">
+        <div><h3>How to add a document</h3><p>AIM does not upload or store a copy of your file. You keep the file in Google Drive and submit a link here.</p></div>
+        <a class="btn btn-secondary" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener">Open Google Drive ↗</a>
+      </div>
+      <ol class="document-steps">
+        <li><strong>Upload or create your document in Google Drive.</strong><span>This can be a résumé, cover letter, degree plan, internship document, certificate, or another useful planning document.</span></li>
+        <li><strong>Open the file’s Share settings.</strong><span>Give the advisor or other SHC person who needs the document permission to view it. For documents containing personal information, sharing directly with the appropriate people is safer than making the file public.</span></li>
+        <li><strong>Copy the share link.</strong><span>In Google Drive, choose <em>Copy link</em> after the correct access has been set.</span></li>
+        <li><strong>Return to AIM and submit the link below.</strong><span>Enter a clear title, choose the document category, paste the Google Drive link, and click <em>Submit document link</em>.</span></li>
+        <li><strong>Check that it appears under Saved links.</strong><span>Once submitted, the document also appears in the Portfolio &amp; documents section of your AIM map. Open the saved link once to make sure it works.</span></li>
+      </ol>
+    </section>` : '<div class="status-banner official"><strong>Document access:</strong> Linked files open from the student’s external storage. Your account must have permission to view them.</div>'}
+    ${canManage ? `<section class="panel document-submit-panel"><div class="panel-head"><div><h3>${isOwnDocuments ? "Submit your document link" : "Add a document link"}</h3>${isOwnDocuments ? '<p class="subtle">Paste the share link from Google Drive after you have set the correct permissions.</p>' : ""}</div></div><form id="document-link-form" class="grid grid-3">
       <div class="field"><label for="link-title">Document title</label><input id="link-title" maxlength="120" placeholder="Current résumé" required></div>
       <div class="field"><label for="link-category">Category</label><select id="link-category">${DOCUMENT_CATEGORIES.map((item) => `<option>${escapeHtml(item)}</option>`).join("")}</select></div>
-      <div class="field"><label for="document-url">Shareable URL</label><input id="document-url" type="url" placeholder="https://…" required><small>Use a link that your advisors can open.</small></div>
-      <div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Add link</button></div>
+      <div class="field"><label for="document-url">Shareable URL</label><input id="document-url" type="url" placeholder="https://drive.google.com/…" required><small>Use a link that the intended advisor or reviewer can open.</small></div>
+      <div class="field document-submit-action"><button class="btn btn-primary" type="submit">${isOwnDocuments ? "Submit document link" : "Add link"}</button></div>
     </form></section>` : ""}
-    <section class="panel" style="margin-top:1rem"><div class="panel-head"><h3>Saved links</h3><span class="subtle">${items.length} item${items.length === 1 ? "" : "s"}</span></div>${items.length ? `<div class="document-list">${items.map((item) => documentCardHtml(item, canManage)).join("")}</div>` : emptyStateHtml("No document links yet", "Add a résumé or another useful planning document link.")}</section>`;
+    <section class="panel" style="margin-top:1rem"><div class="panel-head"><h3>Saved links</h3><span class="subtle">${items.length} item${items.length === 1 ? "" : "s"}</span></div>${items.length ? `<div class="document-list">${items.map((item) => documentCardHtml(item, canManage)).join("")}</div>` : emptyStateHtml("No document links yet", isOwnDocuments ? "Follow the steps above to connect your first document." : "No documents have been linked yet.")}</section>`;
 
   document.getElementById("documents-back")?.addEventListener("click", () => navigate(options.backView));
   document.getElementById("document-link-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = event.currentTarget.querySelector("button[type=submit]");
-    setBusy(button, true, "Adding…");
+    setBusy(button, true, isOwnDocuments ? "Submitting…" : "Adding…");
     try {
       const url = document.getElementById("document-url").value.trim();
       const parsed = new URL(url);
@@ -975,11 +1015,11 @@ async function renderDocuments(studentUid, options = {}) {
       });
       await recordAudit("document_added", { studentUid, targetUid: studentUid, targetEmail: student.email, summary: `${state.profile.displayName} added the document link “${title}”.` });
       await notifyDocumentChange(student, `A document link was added: ${title}.`);
-      toast("Document link added.", "success");
+      toast(isOwnDocuments ? "Document link submitted." : "Document link added.", "success");
       renderDocuments(studentUid, options);
     } catch (error) {
       toast(friendlyError(error), "error");
-      setBusy(button, false, "Add link");
+      setBusy(button, false, isOwnDocuments ? "Submit document link" : "Add link");
     }
   });
 
@@ -1530,7 +1570,11 @@ function adminPlanRowHtml(student, plan) {
 function planCompletion(stages) {
   let completed = 0;
   let total = 0;
-  STAGES.forEach((stage) => stageFieldDefinitions(stage).forEach(([key]) => { total += 1; if (String(stages?.[stage.key]?.[key] || "").trim()) completed += 1; }));
+  STAGES.forEach((stage) => stageFieldDefinitions(stage).forEach(([key]) => {
+    if (key === "reflection") return;
+    total += 1;
+    if (String(stages?.[stage.key]?.[key] || "").trim()) completed += 1;
+  }));
   return { completed, total, percent: total ? Math.round((completed / total) * 100) : 0 };
 }
 
@@ -1768,6 +1812,7 @@ function capitalize(value) { return value ? value.charAt(0).toUpperCase() + valu
 function dateKey(date) { return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`; }
 function timestampMillis(value) { if (!value) return 0; if (typeof value.toMillis === "function") return value.toMillis(); const parsed = new Date(value).getTime(); return Number.isFinite(parsed) ? parsed : 0; }
 function formatDate(value) { const millis = timestampMillis(value); return millis ? new Date(millis).toLocaleString() : "Just now"; }
+function formatShortDate(value) { const millis = timestampMillis(value); return millis ? new Date(millis).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : ""; }
 function escapeHtml(value) { return String(value ?? "").replace(/[&<>'\"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
 function escapeAttr(value) { return escapeHtml(value).replace(/`/g, "&#96;"); }
 async function hashText(text) { const bytes = new TextEncoder().encode(text); const digest = await crypto.subtle.digest("SHA-256", bytes); return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join(""); }

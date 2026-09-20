@@ -761,11 +761,12 @@ function timelineHtml(stages, comments, editable, canComment, studentUid) {
 }
 
 function aimGuideHtml() {
-  return `<details class="aim-guide panel"><summary>Planning guide and examples</summary><div class="guide-grid">
+  return `<details class="aim-guide panel" open><summary>Planning guide and examples</summary><div class="guide-grid">
     <div><h3>High-impact experiences</h3><p>Study abroad, internship, service immersion, or undergraduate research—often planned for the sophomore or junior year.</p></div>
     <div><h3>Campus involvement</h3><p>Try a club, set a leadership goal, or prepare to apply for a campus leadership role.</p></div>
     <div><h3>Academic goals</h3><p>Maintain or raise GPA, build a mentoring relationship, use tutoring, participate in class, make the Dean's List, and plan the senior capstone.</p></div>
-    <div><h3>Summer planning</h3><p>Use all three summers for employment, internships, job shadowing, volunteering, summer school, travel, or professional development.</p></div>
+    <div><h3>Career preparation</h3><p>Build your résumé and professional network, connect with Career Services, explore internships and job shadowing, practice interviewing, and prepare for employment or graduate school.</p></div>
+    <div class="guide-summer"><h3>Summer planning</h3><p>Use all three summers intentionally for employment, internships, job shadowing, volunteering, summer school, travel, or other professional development.</p></div>
   </div></details>`;
 }
 

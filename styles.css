@@ -1454,3 +1454,14 @@ body {
     min-height: .34in !important;
   }
 }
+
+
+/* Restore the original AIM stage colors on the numbered map markers */
+.compact-stage:nth-child(1) .compact-stage-marker span { background: #6fd57d !important; color: #17212a !important; }
+.compact-stage:nth-child(2) .compact-stage-marker span { background: #4dcbbb !important; color: #17212a !important; }
+.compact-stage:nth-child(3) .compact-stage-marker span { background: #67afe8 !important; color: #17212a !important; }
+.compact-stage:nth-child(4) .compact-stage-marker span { background: #a88be0 !important; color: #17212a !important; }
+.compact-stage:nth-child(5) .compact-stage-marker span { background: #eb7ac2 !important; color: #17212a !important; }
+.compact-stage:nth-child(6) .compact-stage-marker span { background: #f49c8d !important; color: #17212a !important; }
+.compact-stage:nth-child(7) .compact-stage-marker span { background: #f5ad65 !important; color: #17212a !important; }
+.compact-stage:nth-child(8) .compact-stage-marker span { background: #ffca35 !important; color: #17212a !important; }

@@ -1115,3 +1115,189 @@ tr:last-child td { border-bottom: 0; }
     border-top: 1px solid #bbb !important;
   }
 }
+
+
+/* Balanced SHC palette + semantic planning colors */
+:root {
+  --tone-academic-bg: #f0ebf3;
+  --tone-academic-border: #c5b4cc;
+  --tone-academic-accent: #5a3768;
+
+  --tone-involvement-bg: #edf4f7;
+  --tone-involvement-border: #b9ccd5;
+  --tone-involvement-accent: #3e6274;
+
+  --tone-impact-bg: #fbf3e3;
+  --tone-impact-border: #dec794;
+  --tone-impact-accent: #765d27;
+
+  --tone-career-bg: #edf5ef;
+  --tone-career-border: #b7cbb9;
+  --tone-career-accent: #45634b;
+
+  --tone-summer-bg: #f8efe7;
+  --tone-summer-border: #d8bfa9;
+  --tone-summer-accent: #76523b;
+
+  --tone-reflection-bg: #f6eff4;
+  --tone-reflection-border: #d4bdcd;
+  --tone-reflection-accent: #6a4660;
+}
+
+/* Keep the page mostly neutral; purple is now an accent instead of a wall of color. */
+body {
+  background:
+    radial-gradient(circle at top left, rgba(61,25,81,.045), transparent 30rem),
+    linear-gradient(180deg, #fbfcfd 0%, #f3f5f6 100%) !important;
+}
+
+/* Sidebar: charcoal/slate with a restrained SHC-purple undertone. */
+.sidebar {
+  background: linear-gradient(180deg, #29343d 0%, #332a38 100%) !important;
+  border-right: 3px solid rgba(61,25,81,.78);
+}
+
+.sidebar-logo {
+  border-bottom-color: rgba(255,255,255,.15) !important;
+}
+
+.nav-button:hover {
+  background: rgba(255,255,255,.08) !important;
+}
+
+.nav-button.active {
+  background: rgba(177,151,188,.17) !important;
+  box-shadow: inset 3px 0 0 #b9a2c3;
+}
+
+/* Footer: neutral dark slate, with SHC purple used only as the brand edge. */
+.site-footer {
+  background: #27323a !important;
+  border-top: 4px solid #3D1951 !important;
+}
+
+.site-footer a {
+  color: #edf1f3 !important;
+}
+
+.site-footer__legal {
+  color: rgba(255,255,255,.64) !important;
+}
+
+/* Summer planning spans the entire guide width. */
+.guide-grid > .guide-summer {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  justify-self: stretch !important;
+  text-align: center;
+}
+
+/* Shared semantic color system for guide cards, editable fields, and read-only fields. */
+.tone-academic {
+  --tone-bg: var(--tone-academic-bg);
+  --tone-border: var(--tone-academic-border);
+  --tone-accent: var(--tone-academic-accent);
+}
+
+.tone-involvement {
+  --tone-bg: var(--tone-involvement-bg);
+  --tone-border: var(--tone-involvement-border);
+  --tone-accent: var(--tone-involvement-accent);
+}
+
+.tone-impact {
+  --tone-bg: var(--tone-impact-bg);
+  --tone-border: var(--tone-impact-border);
+  --tone-accent: var(--tone-impact-accent);
+}
+
+.tone-career {
+  --tone-bg: var(--tone-career-bg);
+  --tone-border: var(--tone-career-border);
+  --tone-accent: var(--tone-career-accent);
+}
+
+.tone-summer {
+  --tone-bg: var(--tone-summer-bg);
+  --tone-border: var(--tone-summer-border);
+  --tone-accent: var(--tone-summer-accent);
+}
+
+.tone-reflection {
+  --tone-bg: var(--tone-reflection-bg);
+  --tone-border: var(--tone-reflection-border);
+  --tone-accent: var(--tone-reflection-accent);
+}
+
+.guide-grid > [class*="tone-"] {
+  background: var(--tone-bg) !important;
+  border-color: var(--tone-border) !important;
+}
+
+.guide-grid > [class*="tone-"] h3 {
+  color: var(--tone-accent);
+}
+
+/* The field itself now carries the category color rather than sitting on plain white. */
+.stage-fields > .field[class*="tone-"] {
+  padding: .78rem;
+  border: 1px solid var(--tone-border);
+  border-radius: 12px;
+  background: var(--tone-bg);
+}
+
+.stage-fields > .field[class*="tone-"] label {
+  color: var(--tone-accent);
+  font-weight: 800;
+}
+
+.stage-fields > .field[class*="tone-"] textarea {
+  background: color-mix(in srgb, var(--tone-bg) 68%, white) !important;
+  border-color: var(--tone-border) !important;
+}
+
+.stage-read-grid > .stage-read-section[class*="tone-"] {
+  background: var(--tone-bg) !important;
+  border-color: var(--tone-border) !important;
+}
+
+.stage-read-grid > .stage-read-section[class*="tone-"] h4 {
+  color: var(--tone-accent);
+}
+
+/* Reflection remains full-width, but now belongs to the same color system. */
+.stage-fields .reflection-field,
+.stage-read-grid .reflection-field {
+  background: var(--tone-reflection-bg) !important;
+  border: 1px solid var(--tone-reflection-border) !important;
+  border-radius: 12px;
+  padding: .85rem !important;
+}
+
+.stage-fields .reflection-field label,
+.stage-read-grid .reflection-field h4 {
+  color: var(--tone-reflection-accent) !important;
+}
+
+.stage-fields .reflection-field textarea {
+  background: color-mix(in srgb, var(--tone-reflection-bg) 68%, white) !important;
+  border-color: var(--tone-reflection-border) !important;
+}
+
+/* Print stays intentionally simple and high-contrast. */
+@media print {
+  .stage-body .stage-fields > .field[class*="tone-"],
+  .stage-read-grid > .stage-read-section[class*="tone-"],
+  .stage-fields .reflection-field,
+  .stage-read-grid .reflection-field {
+    background: #fff !important;
+    border: 1px solid #d0d0d0 !important;
+  }
+
+  .stage-body .stage-fields > .field[class*="tone-"] textarea,
+  .stage-fields .reflection-field textarea {
+    background: #fff !important;
+    border-color: #c9c9c9 !important;
+  }
+}

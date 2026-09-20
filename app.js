@@ -781,8 +781,8 @@ function timelineHtml(stages, comments, editable, canComment, studentUid) {
     const filled = definitions.filter(([key]) => String(value[key] || "").trim()).length;
     const indentedClass = stage.type === "summer" || stage.type === "graduation" ? " stage-accordion--transition" : "";
     const fieldsHtml = editable
-      ? `<div class="stage-fields">${definitions.map(([key, label, placeholder]) => textareaField(`${stage.key}-${key}`, label, value[key], placeholder, key === "reflection" ? "reflection-field" : "")).join("")}</div>`
-      : `<div class="stage-read-grid">${definitions.map(([key, label]) => readSection(label, value[key], key === "reflection" ? "reflection-field" : "")).join("")}</div>`;
+      ? `<div class="stage-fields">${definitions.map(([key, label, placeholder]) => textareaField(`${stage.key}-${key}`, label, value[key], placeholder, fieldToneClass(key))).join("")}</div>`
+      : `<div class="stage-read-grid">${definitions.map(([key, label]) => readSection(label, value[key], fieldToneClass(key))).join("")}</div>`;
 
     return `<section class="compact-stage" style="--stage-color:${stage.color}">
       <div class="compact-stage-marker"><span>${index + 1}</span></div>
@@ -799,11 +799,11 @@ function timelineHtml(stages, comments, editable, canComment, studentUid) {
 
 function aimGuideHtml() {
   return `<details class="aim-guide panel" open><summary>Planning guide and examples</summary><div class="guide-grid">
-    <div><h3>High-impact experiences</h3><p>Study abroad, internship, service immersion, or undergraduate research—often planned for the sophomore or junior year.</p></div>
-    <div><h3>Campus involvement</h3><p>Try a club, set a leadership goal, or prepare to apply for a campus leadership role.</p></div>
-    <div><h3>Academic goals</h3><p>Maintain or raise GPA, build a mentoring relationship, use tutoring, participate in class, make the Dean's List, and plan the senior capstone.</p></div>
-    <div><h3>Career preparation</h3><p>Build your résumé and professional network, connect with Career Services, explore internships and job shadowing, practice interviewing, and prepare for employment or graduate school.</p></div>
-    <div class="guide-summer"><h3>Summer planning</h3><p>Use all three summers intentionally for employment, internships, job shadowing, volunteering, summer school, travel, or other professional development.</p></div>
+    <div class="tone-impact"><h3>High-impact experiences</h3><p>Study abroad, internship, service immersion, or undergraduate research—often planned for the sophomore or junior year.</p></div>
+    <div class="tone-involvement"><h3>Campus involvement</h3><p>Try a club, set a leadership goal, or prepare to apply for a campus leadership role.</p></div>
+    <div class="tone-academic"><h3>Academic goals</h3><p>Maintain or raise GPA, build a mentoring relationship, use tutoring, participate in class, make the Dean's List, and plan the senior capstone.</p></div>
+    <div class="tone-career"><h3>Career preparation</h3><p>Build your résumé and professional network, connect with Career Services, explore internships and job shadowing, practice interviewing, and prepare for employment or graduate school.</p></div>
+    <div class="guide-summer tone-summer"><h3>Summer planning</h3><p>Use all three summers intentionally for employment, internships, job shadowing, volunteering, summer school, travel, or other professional development.</p></div>
   </div></details>`;
 }
 
@@ -858,6 +858,16 @@ function normalizeStageData(stage, value = {}) {
 
 function normalizeAllStages(stages = {}) {
   return Object.fromEntries(STAGES.map((stage) => [stage.key, normalizeStageData(stage, stages[stage.key] || {})]));
+}
+
+function fieldToneClass(key) {
+  if (["academic", "academicProgress"].includes(key)) return "tone-academic";
+  if (["involvement", "serviceTravel"].includes(key)) return "tone-involvement";
+  if (key === "highImpact") return "tone-impact";
+  if (["career", "careerExperience", "destination", "preparation"].includes(key)) return "tone-career";
+  if (key === "summerPlan") return "tone-summer";
+  if (key === "reflection") return "tone-reflection reflection-field";
+  return "";
 }
 
 function textareaField(name, label, value = "", placeholder = "", extraClass = "") {

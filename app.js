@@ -48,7 +48,7 @@ const STAGES = [
 const PLAN_FIELD_KEYS = [
   "academic", "involvement", "highImpact", "career",
   "summerPlan", "careerExperience", "academicProgress", "serviceTravel",
-  "destination", "preparation"
+  "destination", "preparation", "reflection"
 ];
 
 const DOCUMENT_CATEGORIES = [
@@ -585,7 +585,7 @@ async function renderStudentPlan(studentUid, options = {}) {
     ${canEdit ? `<div id="map-form" class="aim-map-form"><div class="map-toolbar"><span class="map-status" id="map-status">${useLocalDraft ? "Recovered recent changes" : planSnap.exists() ? `Saved ${formatDate(cloudPlan.updatedAt)}` : "Not saved yet"}</span><button class="btn btn-primary" id="map-save-now" type="button">Save now</button></div>${timelineHtml(plan.stages || {}, comments, true, canComment, studentUid)}</div>` : timelineHtml(plan.stages || {}, comments, false, canComment, studentUid)}
   `;
 
-  document.getElementById("print-plan-button").addEventListener("click", () => window.print());
+  document.getElementById("print-plan-button").addEventListener("click", printAimPlan);
   document.getElementById("open-plan-documents").addEventListener("click", () => navigate("documents", { studentUid, backView: options.backView || (state.profile.role === "admin" ? "plans" : state.profile.role === "faculty" ? "advisees" : "map") }));
   document.getElementById("back-from-plan")?.addEventListener("click", () => navigate(options.backView));
 
@@ -741,18 +741,55 @@ function updateStageSummary(stageKey) {
   if (badge) badge.textContent = filled ? `${filled}/${total} started` : "Not started";
 }
 
+function printAimPlan() {
+  const sections = Array.from(document.querySelectorAll("details[data-stage]"));
+  const openStates = sections.map((section) => section.open);
+  const textareas = Array.from(document.querySelectorAll(".stage-fields textarea"));
+  const textareaHeights = textareas.map((textarea) => textarea.style.height);
+
+  sections.forEach((section) => { section.open = true; });
+  textareas.forEach((textarea) => {
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.max(textarea.scrollHeight, 72)}px`;
+  });
+  document.body.classList.add("printing-aim-map");
+
+  const restore = () => {
+    sections.forEach((section, index) => { section.open = openStates[index]; });
+    textareas.forEach((textarea, index) => { textarea.style.height = textareaHeights[index]; });
+    document.body.classList.remove("printing-aim-map");
+  };
+
+  window.addEventListener("afterprint", restore, { once: true });
+  window.print();
+}
+
+
 function timelineHtml(stages, comments, editable, canComment, studentUid) {
+  let latestStartedIndex = -1;
+  STAGES.forEach((stage, index) => {
+    const value = normalizeStageData(stage, stages[stage.key] || {});
+    const definitions = stageFieldDefinitions(stage);
+    if (definitions.some(([key]) => String(value[key] || "").trim())) latestStartedIndex = index;
+  });
+  const openIndex = latestStartedIndex >= 0 ? latestStartedIndex : 0;
+
   return `<div class="compact-timeline">${STAGES.map((stage, index) => {
     const value = normalizeStageData(stage, stages[stage.key] || {});
     const definitions = stageFieldDefinitions(stage);
     const sectionComments = comments.filter((comment) => comment.sectionKey === stage.key);
     const filled = definitions.filter(([key]) => String(value[key] || "").trim()).length;
+    const indentedClass = stage.type === "summer" || stage.type === "graduation" ? " stage-accordion--transition" : "";
+    const fieldsHtml = editable
+      ? `<div class="stage-fields">${definitions.map(([key, label, placeholder]) => textareaField(`${stage.key}-${key}`, label, value[key], placeholder, key === "reflection" ? "reflection-field" : "")).join("")}</div>`
+      : `<div class="stage-read-grid">${definitions.map(([key, label]) => readSection(label, value[key], key === "reflection" ? "reflection-field" : "")).join("")}</div>`;
+
     return `<section class="compact-stage" style="--stage-color:${stage.color}">
       <div class="compact-stage-marker"><span>${index + 1}</span></div>
-      <details class="stage-card stage-accordion" data-stage="${stage.key}" ${index === 0 ? "open" : ""}>
+      <details class="stage-card stage-accordion${indentedClass}" data-stage="${stage.key}" ${index === openIndex ? "open" : ""}>
         <summary><span class="stage-summary-title">${escapeHtml(stage.title)}</span><span class="stage-progress" data-stage-progress>${filled ? `${filled}/${definitions.length} started` : "Not started"}</span><span class="stage-chevron" aria-hidden="true">⌄</span></summary>
         <div class="stage-body">
-          ${editable ? `<div class="stage-fields">${definitions.map(([key, label, placeholder]) => textareaField(`${stage.key}-${key}`, label, value[key], placeholder)).join("")}</div>` : definitions.map(([key, label]) => readSection(label, value[key])).join("")}
+          ${fieldsHtml}
           ${(sectionComments.length || canComment) ? `<div class="comment-block"><strong>Advisor comments</strong>${sectionComments.length ? sectionComments.map(commentHtml).join("") : '<p class="subtle">No comments yet.</p>'}${canComment ? `<form class="comment-form" data-section="${stage.key}"><div class="field"><label class="sr-only" for="comment-${stage.key}">Comment on ${escapeHtml(stage.title)}</label><textarea id="comment-${stage.key}" maxlength="2000" placeholder="Add guidance for this section…" required></textarea></div><button class="btn btn-soft btn-small" type="submit">Add comment</button></form>` : ""}</div>` : ""}
         </div>
       </details>
@@ -776,20 +813,32 @@ function stageFieldDefinitions(stage) {
       ["summerPlan", "Main summer plan", "What do you plan to do this summer?"],
       ["careerExperience", "Career-related experience", "Employment, internship, job shadowing, volunteering, or professional development…"],
       ["academicProgress", "Academic progress", "Summer school, degree progress, skill-building, or PTH 205 preparation…"],
-      ["serviceTravel", "Service, travel & reflection", "Service-related travel, community work, or what you hope to learn…"]
+      ["serviceTravel", "Service and/or travel", "Service, community work, travel, or another meaningful summer experience…"],
+      ["reflection", "Summer reflection", "Looking back on the summer, what did you do, what did you learn, and what will you carry forward?"]
     ];
   }
   if (stage.type === "graduation") {
     return [
       ["destination", "Primary destination", "Job, graduate school, service program, or another post-graduation goal…"],
-      ["preparation", "Preparation and next actions", "Applications, references, interviews, portfolio, entrance exams, financial planning…"]
+      ["preparation", "Preparation and next actions", "Applications, references, interviews, portfolio, entrance exams, financial planning…"],
+      ["reflection", "Where you're headed", "Where are you headed next, and what is your plan for the transition?"]
+    ];
+  }
+  if (stage.key === "senior") {
+    return [
+      ["academic", "Academic goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
+      ["involvement", "Campus involvement & leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
+      ["highImpact", "High-impact experience", "Study abroad, internship, service immersion, or undergraduate research…"],
+      ["career", "Career preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
+      ["reflection", "Preparation for next steps", "As senior year ends, what have you done to prepare for employment, graduate school, service, or another next step?"]
     ];
   }
   return [
     ["academic", "Academic goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
     ["involvement", "Campus involvement & leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
     ["highImpact", "High-impact experience", "Study abroad, internship, service immersion, or undergraduate research…"],
-    ["career", "Career preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"]
+    ["career", "Career preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
+    ["reflection", "Reflection", "Looking back on this stage, what did you do, what did you learn, and what will you carry forward?"]
   ];
 }
 
@@ -811,12 +860,12 @@ function normalizeAllStages(stages = {}) {
   return Object.fromEntries(STAGES.map((stage) => [stage.key, normalizeStageData(stage, stages[stage.key] || {})]));
 }
 
-function textareaField(name, label, value = "", placeholder = "") {
-  return `<div class="field"><label for="${name}">${escapeHtml(label)}</label><textarea id="${name}" name="${name}" maxlength="4000" placeholder="${escapeAttr(placeholder)}">${escapeHtml(value || "")}</textarea></div>`;
+function textareaField(name, label, value = "", placeholder = "", extraClass = "") {
+  return `<div class="field ${escapeAttr(extraClass)}"><label for="${name}">${escapeHtml(label)}</label><textarea id="${name}" name="${name}" maxlength="4000" placeholder="${escapeAttr(placeholder)}">${escapeHtml(value || "")}</textarea></div>`;
 }
 
-function readSection(title, text) {
-  return `<div class="stage-read-section"><h4>${escapeHtml(title)}</h4><p class="${text ? "" : "blank"}">${text ? escapeHtml(text) : "Nothing added yet."}</p></div>`;
+function readSection(title, text, extraClass = "") {
+  return `<div class="stage-read-section ${escapeAttr(extraClass)}"><h4>${escapeHtml(title)}</h4><p class="${text ? "" : "blank"}">${text ? escapeHtml(text) : "Nothing added yet."}</p></div>`;
 }
 
 function commentHtml(comment) {

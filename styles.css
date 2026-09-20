@@ -917,3 +917,201 @@ tr:last-child td { border-bottom: 0; }
 .timeline-road path {
   stroke: #806A89 !important;
 }
+
+
+/* AIM map structure refinements */
+.stage-accordion--transition {
+  margin-left: 2.4rem;
+  width: calc(100% - 2.4rem);
+}
+
+.stage-read-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .85rem;
+}
+
+.stage-read-grid .stage-read-section {
+  margin-top: 0;
+  padding: .8rem .85rem;
+  border: 1px solid #dde4e8;
+  border-radius: 11px;
+  background: #fbfcfd;
+}
+
+.stage-fields .reflection-field,
+.stage-read-grid .reflection-field {
+  grid-column: 1 / -1;
+  width: 100%;
+  justify-self: center;
+}
+
+.reflection-field {
+  margin-top: .15rem;
+  padding-top: .9rem;
+  border-top: 1px solid rgba(61,25,81,.18);
+}
+
+.stage-fields .reflection-field label,
+.stage-read-grid .reflection-field h4 {
+  display: block;
+  text-align: center;
+  color: #3D1951;
+  font-weight: 800;
+}
+
+.stage-fields .reflection-field textarea {
+  min-height: 135px;
+  background: #fcf9fd;
+  border-color: #cbbbd1;
+}
+
+.stage-read-grid .reflection-field {
+  background: #fcf9fd;
+  border-color: #cbbbd1;
+}
+
+@media (max-width: 720px) {
+  .stage-accordion--transition {
+    margin-left: 1rem;
+    width: calc(100% - 1rem);
+  }
+
+  .stage-read-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stage-read-grid .reflection-field {
+    grid-column: 1;
+  }
+}
+
+/* Print AIM as a clean planning document rather than a screen capture. */
+@media print {
+  @page {
+    margin: .55in;
+  }
+
+  body {
+    font-size: 10pt;
+    color: #111 !important;
+  }
+
+  .page-head {
+    padding-bottom: .18in;
+    border-bottom: 2px solid #3D1951;
+    margin-bottom: .18in;
+  }
+
+  .page-head h2 {
+    font-size: 18pt;
+    color: #3D1951 !important;
+  }
+
+  .compact-timeline {
+    display: block !important;
+    margin-top: 0 !important;
+  }
+
+  .compact-stage {
+    display: block !important;
+    margin: 0 0 .16in !important;
+    break-inside: avoid-page;
+  }
+
+  .stage-accordion,
+  .stage-accordion--transition {
+    width: 100% !important;
+    margin-left: 0 !important;
+    border: 1px solid #bcbcbc !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  .stage-accordion > summary {
+    min-height: 0 !important;
+    padding: .09in .12in !important;
+    grid-template-columns: 1fr !important;
+    background: #f4f1f5 !important;
+    border: 0 !important;
+    border-bottom: 2px solid #3D1951 !important;
+  }
+
+  .stage-summary-title {
+    font-size: 11.5pt !important;
+    color: #222 !important;
+  }
+
+  .stage-progress,
+  .stage-chevron {
+    display: none !important;
+  }
+
+  .stage-body {
+    display: block !important;
+    padding: .11in .12in !important;
+  }
+
+  .stage-body .stage-fields,
+  .stage-read-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .08in .1in !important;
+  }
+
+  .stage-body .field,
+  .stage-read-grid .stage-read-section {
+    break-inside: avoid;
+    margin: 0 !important;
+  }
+
+  .stage-body .field label,
+  .stage-read-section h4 {
+    font-size: 8.5pt !important;
+    margin-bottom: .03in !important;
+    letter-spacing: .02em !important;
+  }
+
+  .stage-body textarea {
+    width: 100% !important;
+    min-height: .55in !important;
+    padding: .06in .07in !important;
+    border: 1px solid #c9c9c9 !important;
+    border-radius: 3px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    resize: none !important;
+    overflow: visible !important;
+    font: inherit !important;
+    color: #111 !important;
+  }
+
+  .reflection-field {
+    grid-column: 1 / -1 !important;
+    padding-top: .07in !important;
+    border-top: 1px solid #d0c5d4 !important;
+  }
+
+  .stage-fields .reflection-field textarea {
+    min-height: .72in !important;
+    background: #fff !important;
+  }
+
+  .stage-read-grid .stage-read-section {
+    padding: .07in .08in !important;
+    border: 1px solid #d3d3d3 !important;
+    border-radius: 3px !important;
+    background: #fff !important;
+  }
+
+  .stage-read-grid .reflection-field {
+    background: #fff !important;
+  }
+
+  .comment-block {
+    margin-top: .1in !important;
+    padding-top: .08in !important;
+    border-top: 1px solid #bbb !important;
+  }
+}

@@ -428,33 +428,40 @@ service cloud.firestore {
         || (activeApproved()
           && (resource.data.studentUid == request.auth.uid || resource.data.facultyUid == request.auth.uid));
 
-      allow create: if relationshipId == request.resource.data.studentUid + '__' + request.resource.data.facultyUid
-        && request.resource.data.status == 'active'
-        && request.resource.data.studentEmail == userData(request.resource.data.studentUid).email
-        && request.resource.data.facultyEmail == userData(request.resource.data.facultyUid).email
-        && isActiveRole(request.resource.data.studentUid, 'student')
-        && isAdvisorUser(request.resource.data.facultyUid)
-        && request.resource.data.initiatedByUid == request.auth.uid
-        && (
-          isAdmin()
-          || (isStudent() && request.auth.uid == request.resource.data.studentUid)
-          || (isFaculty() && request.auth.uid == request.resource.data.facultyUid)
+      // Administrators are trusted relationship managers. Keeping the admin
+      // path separate prevents faculty-only validation from blocking an admin
+      // who is also serving as an advisor.
+      allow create: if isAdmin()
+        || (
+          relationshipId == request.resource.data.studentUid + '__' + request.resource.data.facultyUid
+          && request.resource.data.status == 'active'
+          && request.resource.data.studentEmail == userData(request.resource.data.studentUid).email
+          && request.resource.data.facultyEmail == userData(request.resource.data.facultyUid).email
+          && isActiveRole(request.resource.data.studentUid, 'student')
+          && isAdvisorUser(request.resource.data.facultyUid)
+          && request.resource.data.initiatedByUid == request.auth.uid
+          && (
+            (isStudent() && request.auth.uid == request.resource.data.studentUid)
+            || (isFaculty() && request.auth.uid == request.resource.data.facultyUid)
+          )
         );
 
-      allow update: if request.resource.data.studentUid == resource.data.studentUid
-        && request.resource.data.facultyUid == resource.data.facultyUid
-        && request.resource.data.studentEmail == resource.data.studentEmail
-        && request.resource.data.facultyEmail == resource.data.facultyEmail
-        && request.resource.data.status in ['active', 'removed']
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'initiatedByUid', 'initiatedByRole', 'updatedByUid', 'updatedAt'
-        ])
-        && (
-          isAdmin()
-          || (isFaculty() && resource.data.facultyUid == request.auth.uid)
-          || (isStudent()
-            && resource.data.studentUid == request.auth.uid
-            && request.resource.data.status == 'active')
+      allow update: if isAdmin()
+        || (
+          request.resource.data.studentUid == resource.data.studentUid
+          && request.resource.data.facultyUid == resource.data.facultyUid
+          && request.resource.data.studentEmail == resource.data.studentEmail
+          && request.resource.data.facultyEmail == resource.data.facultyEmail
+          && request.resource.data.status in ['active', 'removed']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'initiatedByUid', 'initiatedByRole', 'updatedByUid', 'updatedAt'
+          ])
+          && (
+            (isFaculty() && resource.data.facultyUid == request.auth.uid)
+            || (isStudent()
+              && resource.data.studentUid == request.auth.uid
+              && request.resource.data.status == 'active')
+          )
         );
 
       allow delete: if isAdmin();
@@ -505,18 +512,20 @@ service cloud.firestore {
         || (activeApproved()
           && (resource.data.studentEmail == currentUser().email || resource.data.facultyEmail == currentUser().email));
 
-      allow create: if request.resource.data.status == 'pending'
-        && request.resource.data.studentEmail is string
-        && request.resource.data.facultyEmail is string
-        && request.resource.data.initiatedByUid == request.auth.uid
-        && (
-          isAdmin()
-          || (isStudent()
-            && request.resource.data.studentEmail == currentUser().email
-            && request.resource.data.initiatedByRole == 'student')
-          || (isFaculty()
-            && request.resource.data.facultyEmail == currentUser().email
-            && request.resource.data.initiatedByRole == 'faculty')
+      allow create: if isAdmin()
+        || (
+          request.resource.data.status == 'pending'
+          && request.resource.data.studentEmail is string
+          && request.resource.data.facultyEmail is string
+          && request.resource.data.initiatedByUid == request.auth.uid
+          && (
+            (isStudent()
+              && request.resource.data.studentEmail == currentUser().email
+              && request.resource.data.initiatedByRole == 'student')
+            || (isFaculty()
+              && request.resource.data.facultyEmail == currentUser().email
+              && request.resource.data.initiatedByRole == 'faculty')
+          )
         );
 
       allow update: if (

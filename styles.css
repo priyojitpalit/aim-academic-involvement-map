@@ -1417,3 +1417,40 @@ body {
   .stage-last-updated,
   .field-helper { display: none !important; }
 }
+
+
+/* Professional sidebar navigation icons */
+.nav-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-grid;
+  place-items: center;
+  color: currentColor;
+}
+
+.nav-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Print only student-entered content; never print example/placeholder copy. */
+@media print {
+  .stage-fields textarea::placeholder {
+    color: transparent !important;
+    opacity: 0 !important;
+  }
+
+  .stage-fields textarea {
+    -webkit-text-fill-color: #111 !important;
+  }
+
+  .stage-fields textarea:placeholder-shown {
+    min-height: .34in !important;
+  }
+}

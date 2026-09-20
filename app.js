@@ -476,30 +476,44 @@ function updateNotificationBadge(count) {
   );
 }
 
+function sidebarIcon(name) {
+  const icons = {
+    map: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18 3.5 20.5V6L9 3.5l6 2.5L20.5 3v14.5L15 20l-6-2Z"/><path d="M9 3.5V18M15 6v14"/></svg>',
+    documents: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h7l4 4V20.5H7Z"/><path d="M14 3.5v4h4M10 12h5M10 15.5h5"/></svg>',
+    advisors: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM15.8 10a2.4 2.4 0 1 0 0-4.8"/><path d="M3.5 19c.4-3.2 2.1-5 5-5s4.7 1.8 5.1 5M14 14.1c3-.4 5.2 1.2 5.6 4.9"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 10a5.5 5.5 0 0 1 11 0v3.6l1.7 2.4H4.8l1.7-2.4Z"/><path d="M10 19h4"/></svg>',
+    profile: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c.5-3.7 2.7-5.7 6.5-5.7s6 2 6.5 5.7"/></svg>',
+    dashboard: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg>',
+    users: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 19c.4-3.3 2.2-5 5.5-5s5.1 1.7 5.5 5"/><path d="M15.5 6.3a2.5 2.5 0 0 1 0 4.8M16 14c2.6.1 4.1 1.8 4.5 5"/></svg>',
+    relationships: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/><path d="M9 8.6l6 6M15.5 5H19v3.5M8.5 19H5v-3.5"/></svg>'
+  };
+  return icons[name] || icons.dashboard;
+}
+
 function navItemsForRole(role) {
   if (role === "student") {
     return [
-      { view: "map", label: "My AIM Map", icon: "🧭" },
-      { view: "documents", label: "Document Links", icon: "🔗" },
-      { view: "advisors", label: "My Advisors", icon: "👥" },
-      { view: "notifications", label: "Notifications", icon: "🔔" },
-      { view: "profile", label: "My Profile", icon: "⚙" }
+      { view: "map", label: "My AIM Map", icon: sidebarIcon("map") },
+      { view: "documents", label: "Document Links", icon: sidebarIcon("documents") },
+      { view: "advisors", label: "My Advisors", icon: sidebarIcon("advisors") },
+      { view: "notifications", label: "Notifications", icon: sidebarIcon("bell") },
+      { view: "profile", label: "My Profile", icon: sidebarIcon("profile") }
     ];
   }
   if (role === "faculty") {
     return [
-      { view: "advisees", label: "My Advisees", icon: "👥" },
-      { view: "notifications", label: "Notifications", icon: "🔔" },
-      { view: "profile", label: "My Profile", icon: "⚙" }
+      { view: "advisees", label: "My Advisees", icon: sidebarIcon("advisors") },
+      { view: "notifications", label: "Notifications", icon: sidebarIcon("bell") },
+      { view: "profile", label: "My Profile", icon: sidebarIcon("profile") }
     ];
   }
   return [
-    { view: "admin", label: "Admin Dashboard", icon: "▦" },
-    { view: "plans", label: "All Student Plans", icon: "🧭" },
-    { view: "users", label: "Manage Users", icon: "👤" },
-    { view: "relationships", label: "Relationships", icon: "⇄" },
-    { view: "notifications", label: "Notifications", icon: "🔔" },
-    { view: "profile", label: "My Profile", icon: "⚙" }
+    { view: "admin", label: "Admin Dashboard", icon: sidebarIcon("dashboard") },
+    { view: "plans", label: "All Student Plans", icon: sidebarIcon("map") },
+    { view: "users", label: "Manage Users", icon: sidebarIcon("users") },
+    { view: "relationships", label: "Relationships", icon: sidebarIcon("relationships") },
+    { view: "notifications", label: "Notifications", icon: sidebarIcon("bell") },
+    { view: "profile", label: "My Profile", icon: sidebarIcon("profile") }
   ];
 }
 
@@ -762,9 +776,11 @@ function printAimPlan() {
   const openStates = sections.map((section) => section.open);
   const textareas = Array.from(document.querySelectorAll(".stage-fields textarea"));
   const textareaHeights = textareas.map((textarea) => textarea.style.height);
+  const textareaPlaceholders = textareas.map((textarea) => textarea.getAttribute("placeholder") || "");
 
   sections.forEach((section) => { section.open = true; });
   textareas.forEach((textarea) => {
+    textarea.setAttribute("placeholder", "");
     textarea.style.height = "auto";
     textarea.style.height = `${Math.max(textarea.scrollHeight, 72)}px`;
   });
@@ -772,7 +788,10 @@ function printAimPlan() {
 
   const restore = () => {
     sections.forEach((section, index) => { section.open = openStates[index]; });
-    textareas.forEach((textarea, index) => { textarea.style.height = textareaHeights[index]; });
+    textareas.forEach((textarea, index) => {
+      textarea.style.height = textareaHeights[index];
+      textarea.setAttribute("placeholder", textareaPlaceholders[index]);
+    });
     document.body.classList.remove("printing-aim-map");
   };
 

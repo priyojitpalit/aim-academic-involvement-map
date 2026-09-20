@@ -35,14 +35,14 @@ import {
 import { firebaseConfig } from "./firebase-config.js";
 
 const STAGES = [
-  { key: "freshman", title: "Freshman Year", color: "#6fd57d", type: "year" },
-  { key: "summer1", title: "Summer One", color: "#4dcbbb", type: "summer" },
-  { key: "sophomore", title: "Sophomore Year", color: "#67afe8", type: "year" },
-  { key: "summer2", title: "Summer Two", color: "#a88be0", type: "summer" },
-  { key: "junior", title: "Junior Year", color: "#eb7ac2", type: "year" },
-  { key: "summer3", title: "Summer Three", color: "#f49c8d", type: "summer" },
-  { key: "senior", title: "Senior Year", color: "#f5ad65", type: "year" },
-  { key: "graduation", title: "Job / Grad School / Service", color: "#ffca35", type: "graduation" }
+  { key: "freshman", title: "Freshman Year", color: "#3D1951", type: "year" },
+  { key: "summer1", title: "Summer One", color: "#48215B", type: "summer" },
+  { key: "sophomore", title: "Sophomore Year", color: "#542966", type: "year" },
+  { key: "summer2", title: "Summer Two", color: "#603271", type: "summer" },
+  { key: "junior", title: "Junior Year", color: "#6C3B7C", type: "year" },
+  { key: "summer3", title: "Summer Three", color: "#784587", type: "summer" },
+  { key: "senior", title: "Senior Year", color: "#855092", type: "year" },
+  { key: "graduation", title: "Job / Grad School / Service", color: "#925C9D", type: "graduation" }
 ];
 
 const PLAN_FIELD_KEYS = [

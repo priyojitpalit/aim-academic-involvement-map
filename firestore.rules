@@ -562,7 +562,10 @@ service cloud.firestore {
           && request.resource.data.type == resource.data.type
           && request.resource.data.category == resource.data.category
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'title', 'body', 'read', 'updatedAt', 'eventCount'
+            'title', 'body', 'read', 'updatedAt', 'eventCount',
+            'relatedStudentUid', 'studentUid', 'facultyUid',
+            'targetView', 'targetSectionKey', 'targetAnchor', 'targetMode',
+            'targetPersonUid', 'targetRelationshipId', 'targetUserUid'
           ])
           && request.resource.data.read == false
           && request.resource.data.eventCount is int

@@ -1465,3 +1465,16 @@ body {
 .compact-stage:nth-child(6) .compact-stage-marker span { background: #f49c8d !important; color: #17212a !important; }
 .compact-stage:nth-child(7) .compact-stage-marker span { background: #f5ad65 !important; color: #17212a !important; }
 .compact-stage:nth-child(8) .compact-stage-marker span { background: #ffca35 !important; color: #17212a !important; }
+
+
+/* Deep-linked notification destination */
+.notification-target {
+  outline: 3px solid rgba(61,25,81,.22) !important;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 7px rgba(61,25,81,.07) !important;
+  transition: outline-color .25s ease, box-shadow .25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notification-target { transition: none; }
+}

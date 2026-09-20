@@ -540,12 +540,12 @@ async function navigate(view, options = {}) {
   setMainLoading();
 
   try {
-    if (view === "map") await renderStudentPlan(state.user.uid, { editable: true });
+    if (view === "map") await renderStudentPlan(state.user.uid, { ...options, editable: true });
     else if (view === "documents") await renderDocuments(options.studentUid || state.user.uid, { backView: options.backView });
     else if (view === "advisors") await renderAdvisors();
     else if (view === "advisees") await renderAdvisees();
     else if (view === "studentPlan") {
-      const advisorMode = options.backView === "advisees";
+      const advisorMode = options.advisorMode === true || options.backView === "advisees";
       await renderStudentPlan(options.studentUid || state.currentStudentUid, {
         editable: state.profile.role === "admin" && !advisorMode,
         backView: options.backView,
@@ -558,6 +558,7 @@ async function navigate(view, options = {}) {
     else if (view === "plans") await renderAdminPlans();
     else if (view === "users") await renderAdminUsers();
     else if (view === "relationships") await renderAdminRelationships();
+    focusNavigationTarget(options);
   } catch (error) {
     console.error(error);
     const main = document.getElementById("main-content");
@@ -568,6 +569,43 @@ async function navigate(view, options = {}) {
 function setMainLoading() {
   const main = document.getElementById("main-content");
   if (main) main.innerHTML = '<div class="loader-inline"><span class="spinner"></span> Loading…</div>';
+}
+
+function focusNavigationTarget(options = {}) {
+  const sectionKey = options.targetSectionKey || "";
+  let target = null;
+
+  if (sectionKey) {
+    const details = document.querySelector(`details[data-stage="${sectionKey}"]`);
+    if (details) {
+      document.querySelectorAll("details[data-stage]").forEach((item) => { item.open = item === details; });
+      if (options.targetAnchor === "comments") target = details.querySelector(".comment-block") || details;
+      else target = details;
+    }
+  }
+
+  if (!target && options.targetAnchor === "documents") {
+    target = document.querySelector(".plan-documents-summary");
+  }
+
+  if (!target && options.targetPersonUid) {
+    target = document.querySelector(`[data-person-id="${options.targetPersonUid}"]`);
+  }
+
+  if (!target && options.targetRelationshipId) {
+    target = document.querySelector(`[data-relationship-row="${options.targetRelationshipId}"]`);
+  }
+
+  if (!target && options.targetUserUid) {
+    target = document.querySelector(`[data-user-row="${options.targetUserUid}"]`);
+  }
+
+  if (!target) return;
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.classList.add("notification-target");
+    window.setTimeout(() => target.classList.remove("notification-target"), 2800);
+  });
 }
 
 async function renderStudentPlan(studentUid, options = {}) {
@@ -1157,7 +1195,7 @@ function personCardHtml(person, kind, context = {}) {
   } else {
     actions = `<div class="button-row"><button class="btn btn-primary btn-small" data-view-student="${person.id}">View map</button><button class="btn btn-danger btn-small" data-remove-advisee="${person.id}">Remove</button></div>`;
   }
-  return `<article class="person-card"><div class="person-info"><strong>${escapeHtml(person.displayName)}</strong><span>${escapeHtml(person.email)}</span>${context.request ? `<small>Reason: ${escapeHtml(context.request.reason || "Not provided")}</small>` : ""}</div>${actions}</article>`;
+  return `<article class="person-card" data-person-id="${escapeAttr(person.id)}"><div class="person-info"><strong>${escapeHtml(person.displayName)}</strong><span>${escapeHtml(person.email)}</span>${context.request ? `<small>Reason: ${escapeHtml(context.request.reason || "Not provided")}</small>` : ""}</div>${actions}</article>`;
 }
 
 async function runRelationshipAction(form, action) {
@@ -1296,23 +1334,32 @@ async function notifyPlanChange(student, changedSections) {
   const recipients = new Set(relationships.map((item) => item.facultyUid));
   if (state.profile.role === "admin") recipients.add(student.id);
   recipients.delete(state.user.uid);
-  await Promise.all(Array.from(recipients).map((recipientUid) => addOrGroupNotification({
-    recipientUid,
-    senderUid: state.user.uid,
-    studentUid: student.id,
-    facultyUid: relationships.find((item) => item.facultyUid === recipientUid)?.facultyUid || "",
-    type: "plan-update",
-    category: "planUpdates",
-    title: "AIM plan updated",
-    body: `${state.profile.displayName} updated ${changedSections.map(stageTitle).join(", ") || "the AIM plan"}.`,
-    relatedStudentUid: student.id
-  }, `plan-${recipientUid}-${state.user.uid}-${student.id}-${dateKey(new Date())}`)));
+  const latestSectionKey = changedSections[changedSections.length - 1] || "";
+
+  await Promise.all(Array.from(recipients).map((recipientUid) => {
+    const advisorRelationship = relationships.find((item) => item.facultyUid === recipientUid);
+    const recipientIsStudent = recipientUid === student.id;
+    return addOrGroupNotification({
+      recipientUid,
+      senderUid: state.user.uid,
+      studentUid: student.id,
+      facultyUid: advisorRelationship?.facultyUid || "",
+      type: "plan-update",
+      category: "planUpdates",
+      title: "AIM plan updated",
+      body: `${state.profile.displayName} updated ${changedSections.map(stageTitle).join(", ") || "the AIM plan"}.`,
+      relatedStudentUid: student.id,
+      targetView: recipientIsStudent ? "map" : "studentPlan",
+      targetSectionKey: latestSectionKey,
+      targetAnchor: "stage",
+      targetMode: advisorRelationship ? "advisor" : ""
+    }, `plan-${recipientUid}-${state.user.uid}-${student.id}-${dateKey(new Date())}`);
+  }));
 }
 
 async function notifyComment(student, sectionKey, advisorMode = false) {
-  // Faculty members are allowed to see their own relationship with a student,
-  // but not the student's complete advisor list. Avoid querying every advisor
-  // when a faculty member leaves a comment.
+  // Faculty members and administrators acting as advisors notify the student
+  // directly and route the student to the exact commented stage.
   if (state.profile.role === "faculty" || advisorMode) {
     return addNotification({
       recipientUid: student.id,
@@ -1323,27 +1370,40 @@ async function notifyComment(student, sectionKey, advisorMode = false) {
       category: "comments",
       title: "New AIM comment",
       body: `${state.profile.displayName} commented on ${stageTitle(sectionKey)}.`,
-      relatedStudentUid: student.id
+      relatedStudentUid: student.id,
+      targetView: "map",
+      targetSectionKey: sectionKey,
+      targetAnchor: "comments",
+      targetMode: "student"
     });
   }
 
-  // Administrators may notify the student and all active advisors.
+  // Administrators commenting from the administrative view notify the student
+  // and every active advisor. Advisors land in their advisor-style view.
   const relationships = (await getRelationshipsForStudent(student.id)).filter((item) => item.status === "active");
   const recipients = new Set([student.id]);
   relationships.forEach((item) => recipients.add(item.facultyUid));
   recipients.delete(state.user.uid);
 
-  await Promise.all(Array.from(recipients).map((recipientUid) => addNotification({
-    recipientUid,
-    senderUid: state.user.uid,
-    studentUid: student.id,
-    facultyUid: relationships.find((item) => item.facultyUid === recipientUid)?.facultyUid || "",
-    type: "comment",
-    category: "comments",
-    title: "New AIM comment",
-    body: `${state.profile.displayName} commented on ${stageTitle(sectionKey)}.`,
-    relatedStudentUid: student.id
-  })));
+  await Promise.all(Array.from(recipients).map((recipientUid) => {
+    const advisorRelationship = relationships.find((item) => item.facultyUid === recipientUid);
+    const recipientIsStudent = recipientUid === student.id;
+    return addNotification({
+      recipientUid,
+      senderUid: state.user.uid,
+      studentUid: student.id,
+      facultyUid: advisorRelationship?.facultyUid || "",
+      type: "comment",
+      category: "comments",
+      title: "New AIM comment",
+      body: `${state.profile.displayName} commented on ${stageTitle(sectionKey)}.`,
+      relatedStudentUid: student.id,
+      targetView: recipientIsStudent ? "map" : "studentPlan",
+      targetSectionKey: sectionKey,
+      targetAnchor: "comments",
+      targetMode: advisorRelationship ? "advisor" : ""
+    });
+  }));
 }
 
 async function notifyDocumentChange(student, body) {
@@ -1351,30 +1411,73 @@ async function notifyDocumentChange(student, body) {
   const recipients = new Set(relationships.map((item) => item.facultyUid));
   if (state.profile.role === "admin") recipients.add(student.id);
   recipients.delete(state.user.uid);
-  await Promise.all(Array.from(recipients).map((recipientUid) => addNotification({
-    recipientUid, senderUid: state.user.uid, studentUid: student.id,
-    facultyUid: relationships.find((item) => item.facultyUid === recipientUid)?.facultyUid || "",
-    type: "document-update", category: "documents", title: "AIM document links changed", body, relatedStudentUid: student.id
-  })));
+
+  await Promise.all(Array.from(recipients).map((recipientUid) => {
+    const advisorRelationship = relationships.find((item) => item.facultyUid === recipientUid);
+    const recipientIsStudent = recipientUid === student.id;
+    return addNotification({
+      recipientUid,
+      senderUid: state.user.uid,
+      studentUid: student.id,
+      facultyUid: advisorRelationship?.facultyUid || "",
+      type: "document-update",
+      category: "documents",
+      title: "AIM document links changed",
+      body,
+      relatedStudentUid: student.id,
+      targetView: recipientIsStudent ? "documents" : "studentPlan",
+      targetAnchor: recipientIsStudent ? "" : "documents",
+      targetMode: advisorRelationship ? "advisor" : ""
+    });
+  }));
 }
 
 async function notifyRelationshipStatus(studentUid, facultyUid, body) {
   const recipients = [studentUid, facultyUid].filter((uid) => uid && uid !== state.user.uid);
-  await Promise.all(recipients.map((recipientUid) => addNotification({
-    recipientUid, senderUid: state.user.uid, studentUid, facultyUid,
-    type: "relationship", category: "relationships", title: "AIM advising relationship changed", body, relatedStudentUid: studentUid
-  })));
+  await Promise.all(recipients.map((recipientUid) => {
+    const recipientIsStudent = recipientUid === studentUid;
+    return addNotification({
+      recipientUid,
+      senderUid: state.user.uid,
+      studentUid,
+      facultyUid,
+      type: "relationship",
+      category: "relationships",
+      title: "AIM advising relationship changed",
+      body,
+      relatedStudentUid: studentUid,
+      targetView: recipientIsStudent ? "advisors" : "advisees",
+      targetPersonUid: recipientIsStudent ? facultyUid : studentUid,
+      targetMode: recipientIsStudent ? "student" : "advisor"
+    });
+  }));
 }
 
 async function notifyRemovalRequest(facultyUid, reason) {
   const admins = await getUsersByRole("admin");
-  const recipients = new Set([facultyUid, ...admins.map((item) => item.id)]);
+  const adminIds = new Set(admins.map((item) => item.id));
+  const recipients = new Set([facultyUid, ...adminIds]);
   recipients.delete(state.user.uid);
-  await Promise.all(Array.from(recipients).map((recipientUid) => addNotification({
-    recipientUid, senderUid: state.user.uid, studentUid: state.user.uid, facultyUid,
-    type: "removal-request", category: recipientUid === facultyUid ? "relationships" : "administrative",
-    title: "Advisor removal request", body: `${state.profile.displayName} requested advisor removal. Reason: ${reason}`, relatedStudentUid: state.user.uid
-  })));
+  const relationshipIdValue = relationshipId(state.user.uid, facultyUid);
+
+  await Promise.all(Array.from(recipients).map((recipientUid) => {
+    const recipientIsAdmin = adminIds.has(recipientUid);
+    return addNotification({
+      recipientUid,
+      senderUid: state.user.uid,
+      studentUid: state.user.uid,
+      facultyUid,
+      type: "removal-request",
+      category: recipientIsAdmin ? "administrative" : "relationships",
+      title: "Advisor removal request",
+      body: `${state.profile.displayName} requested advisor removal. Reason: ${reason}`,
+      relatedStudentUid: state.user.uid,
+      targetView: recipientIsAdmin ? "relationships" : "advisees",
+      targetRelationshipId: recipientIsAdmin ? relationshipIdValue : "",
+      targetPersonUid: recipientIsAdmin ? "" : state.user.uid,
+      targetMode: recipientIsAdmin ? "admin" : "advisor"
+    });
+  }));
 }
 
 async function addNotification(payload) {
@@ -1426,6 +1529,51 @@ async function recipientAllows(recipientUid, category) {
   return !prefs.allMuted && prefs[category] !== false;
 }
 
+function notificationDestination(item) {
+  const role = state.profile?.role || "";
+  let view = item.targetView || "";
+  const options = {};
+
+  if (!view) {
+    // Backward-compatible routing for notifications created before deep links existed.
+    if (item.type === "plan-update") view = role === "student" ? "map" : "studentPlan";
+    else if (item.type === "comment") view = role === "student" ? "map" : "studentPlan";
+    else if (item.type === "document-update") view = role === "student" ? "documents" : "studentPlan";
+    else if (item.type === "removal-request") view = role === "admin" ? "relationships" : role === "student" ? "advisors" : "advisees";
+    else if (item.type === "relationship") view = role === "student" ? "advisors" : role === "admin" && item.facultyUid !== state.user.uid ? "relationships" : "advisees";
+    else if (item.type === "administrative") view = "profile";
+    else view = role === "student" ? "map" : role === "faculty" ? "advisees" : "admin";
+  }
+
+  if (view === "studentPlan") {
+    options.studentUid = item.relatedStudentUid || item.studentUid || "";
+    options.backView = "notifications";
+    options.advisorMode = item.targetMode === "advisor" || role === "faculty" || (role === "admin" && item.facultyUid === state.user.uid);
+  }
+  if (view === "documents" && role !== "student") {
+    options.studentUid = item.relatedStudentUid || item.studentUid || "";
+    options.backView = "notifications";
+  }
+
+  options.targetSectionKey = item.targetSectionKey || "";
+  options.targetAnchor = item.targetAnchor || "";
+  options.targetPersonUid = item.targetPersonUid || "";
+  options.targetRelationshipId = item.targetRelationshipId || "";
+  options.targetUserUid = item.targetUserUid || "";
+
+  return { view, options };
+}
+
+function notificationActionLabel(item) {
+  if (item.type === "plan-update") return "View update";
+  if (item.type === "comment") return "View comment";
+  if (item.type === "document-update") return "View documents";
+  if (item.type === "removal-request") return state.profile?.role === "admin" ? "Review request" : "View request";
+  if (item.type === "relationship") return state.profile?.role === "student" ? "View advisors" : "View advisees";
+  if (item.type === "administrative") return "View details";
+  return "Open";
+}
+
 async function renderNotifications() {
   const snap = await getDocs(query(collection(db, "notifications"), where("recipientUid", "==", state.user.uid)));
   const notifications = snap.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => timestampMillis(b.updatedAt || b.createdAt) - timestampMillis(a.updatedAt || a.createdAt));
@@ -1445,15 +1593,15 @@ async function renderNotifications() {
       const item = notifications.find((entry) => entry.id === button.dataset.notificationId);
       if (!item) return;
       if (!item.read) await updateDoc(doc(db, "notifications", item.id), { read: true, readAt: serverTimestamp() }).catch(() => {});
-      if (item.relatedStudentUid && ["faculty", "admin"].includes(state.profile.role)) navigate("studentPlan", { studentUid: item.relatedStudentUid, backView: "notifications" });
-      else if (state.profile.role === "student") navigate("map");
+      const destination = notificationDestination(item);
+      await navigate(destination.view, destination.options);
     });
   });
 }
 
 function notificationHtml(item) {
   const count = Number(item.eventCount || 1);
-  return `<article class="notification ${item.read ? "" : "unread"}"><div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.body)}${count > 1 ? ` <strong>(${count} grouped updates)</strong>` : ""}</p><time>${formatDate(item.updatedAt || item.createdAt)}</time></div><button class="btn btn-secondary btn-small" data-notification-id="${item.id}">Open</button></article>`;
+  return `<article class="notification ${item.read ? "" : "unread"}"><div><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.body)}${count > 1 ? ` <strong>(${count} grouped updates)</strong>` : ""}</p><time>${formatDate(item.updatedAt || item.createdAt)}</time></div><button class="btn btn-secondary btn-small" data-notification-id="${item.id}">${escapeHtml(notificationActionLabel(item))}</button></article>`;
 }
 
 async function renderProfile() {
@@ -1628,7 +1776,7 @@ async function renderAdminUsers() {
       const existing = await findUserByEmail(email, { includeInactive: true });
       if (existing) {
         await updateDoc(doc(db, "users", existing.id), { role, approved: true, status: "active", updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
-        await addNotification({ recipientUid: existing.id, senderUid: state.user.uid, studentUid: role === "student" ? existing.id : "", facultyUid: role === "faculty" ? existing.id : "", type: "administrative", category: "administrative", title: "AIM account role changed", body: `An administrator assigned your AIM role as ${capitalize(role)}.`, relatedStudentUid: role === "student" ? existing.id : "" }).catch(() => {});
+        await addNotification({ recipientUid: existing.id, senderUid: state.user.uid, studentUid: role === "student" ? existing.id : "", facultyUid: role === "faculty" ? existing.id : "", type: "administrative", category: "administrative", title: "AIM account role changed", body: `An administrator assigned your AIM role as ${capitalize(role)}.`, relatedStudentUid: role === "student" ? existing.id : "", targetView: "profile" }).catch(() => {});
         await recordAudit("user_role_changed", { targetUid: existing.id, targetEmail: email, summary: `${state.profile.displayName} assigned ${email} as ${role}.` });
       } else {
         await setDoc(doc(db, "emailApprovals", email), { email, role, active: true, createdByUid: state.user.uid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
@@ -1673,7 +1821,7 @@ function bindUserTableActions() {
       try {
         const target = await getUser(uid);
         await updateDoc(doc(db, "users", uid), { role, approved, status, updatedAt: serverTimestamp(), updatedByUid: state.user.uid });
-        await addNotification({ recipientUid: uid, senderUid: state.user.uid, studentUid: role === "student" ? uid : "", facultyUid: role === "faculty" ? uid : "", type: "administrative", category: "administrative", title: "AIM account changed", body: `Your AIM role is now ${capitalize(role)} and your account is ${status}.`, relatedStudentUid: role === "student" ? uid : "" }).catch(() => {});
+        await addNotification({ recipientUid: uid, senderUid: state.user.uid, studentUid: role === "student" ? uid : "", facultyUid: role === "faculty" ? uid : "", type: "administrative", category: "administrative", title: "AIM account changed", body: `Your AIM role is now ${capitalize(role)} and your account is ${status}.`, relatedStudentUid: role === "student" ? uid : "", targetView: "profile" }).catch(() => {});
         await recordAudit("user_role_changed", { targetUid: uid, targetEmail: target?.email || "", summary: `${state.profile.displayName} changed ${target?.email || uid} to ${role}/${status}.` });
         toast("User updated.", "success");
         setBusy(button, false, "Save");
@@ -1773,7 +1921,7 @@ async function renderAdminRelationships() {
 
 function relationshipRowHtml(item, request) {
   const pending = request?.status === "pending";
-  return `<tr><td>${escapeHtml(item.studentEmail || item.studentUid)}</td><td>${escapeHtml(item.facultyEmail || item.facultyUid)}</td><td>${statusPill(item.status)}</td><td>${pending ? `<strong>Pending</strong><br><span class="subtle">${escapeHtml(request.reason || "No reason supplied")}</span><br><small>${formatDate(request.requestedAt)}</small>` : request ? `${statusPill(request.status)}<br><span class="subtle">${escapeHtml(request.reason || "")}</span>` : '<span class="subtle">None</span>'}</td><td><div class="table-actions">${pending ? `<button class="btn btn-danger btn-small" data-approve-removal="${item.id}">Approve removal</button><button class="btn btn-secondary btn-small" data-reject-removal="${item.id}">Keep advisor</button>` : `<button class="btn btn-secondary btn-small" data-toggle-relationship="${item.id}" data-next-status="${item.status === "active" ? "removed" : "active"}">${item.status === "active" ? "Admin remove" : "Restore"}</button>`}<button class="btn btn-secondary btn-small" data-admin-rel-plan="${item.studentUid}">View plan</button></div></td></tr>`;
+  return `<tr data-relationship-row="${escapeAttr(item.id)}"><td>${escapeHtml(item.studentEmail || item.studentUid)}</td><td>${escapeHtml(item.facultyEmail || item.facultyUid)}</td><td>${statusPill(item.status)}</td><td>${pending ? `<strong>Pending</strong><br><span class="subtle">${escapeHtml(request.reason || "No reason supplied")}</span><br><small>${formatDate(request.requestedAt)}</small>` : request ? `${statusPill(request.status)}<br><span class="subtle">${escapeHtml(request.reason || "")}</span>` : '<span class="subtle">None</span>'}</td><td><div class="table-actions">${pending ? `<button class="btn btn-danger btn-small" data-approve-removal="${item.id}">Approve removal</button><button class="btn btn-secondary btn-small" data-reject-removal="${item.id}">Keep advisor</button>` : `<button class="btn btn-secondary btn-small" data-toggle-relationship="${item.id}" data-next-status="${item.status === "active" ? "removed" : "active"}">${item.status === "active" ? "Admin remove" : "Restore"}</button>`}<button class="btn btn-secondary btn-small" data-admin-rel-plan="${item.studentUid}">View plan</button></div></td></tr>`;
 }
 
 async function preapproveEmail(email, role) {

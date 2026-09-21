@@ -416,9 +416,10 @@ function renderShell() {
         </nav>
         <div class="sidebar-footer"><div class="user-mini"><strong>${escapeHtml(state.profile.displayName)}</strong><span>${escapeHtml(state.profile.email)}</span><span>${capitalize(role)}</span></div></div>
       </aside>
+      <button class="mobile-nav-backdrop" id="mobile-nav-backdrop" type="button" aria-label="Close navigation" tabindex="-1"></button>
       <div class="app-main">
         <header class="topbar">
-          <div class="button-row topbar-title-group"><button class="btn btn-secondary btn-small mobile-menu" id="mobile-menu" aria-label="Open navigation">☰</button><span class="topbar-brand">AIM</span><span class="topbar-brand-divider" aria-hidden="true">·</span><h1 id="view-title">AIM</h1></div>
+          <div class="button-row topbar-title-group"><button class="btn btn-secondary btn-small mobile-menu" id="mobile-menu" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">☰</button><span class="topbar-brand">AIM</span><span class="topbar-brand-divider" aria-hidden="true">·</span><h1 id="view-title">AIM</h1></div>
           <div class="topbar-actions"><button class="btn btn-secondary btn-small" id="signout-button">Sign out</button></div>
         </header>
         <main id="main-content" class="content"><div class="loader-inline"><span class="spinner"></span> Loading…</div></main>
@@ -430,9 +431,33 @@ function renderShell() {
     await flushAutosaveIfNeeded();
     await signOut(auth);
   });
-  document.getElementById("mobile-menu").addEventListener("click", () => document.getElementById("sidebar").classList.toggle("open"));
+  const mobileMenu = document.getElementById("mobile-menu");
+  const mobileBackdrop = document.getElementById("mobile-nav-backdrop");
+
+  mobileMenu.addEventListener("click", () => {
+    const sidebar = document.getElementById("sidebar");
+    setMobileNavigationOpen(!sidebar.classList.contains("open"));
+  });
+
+  mobileBackdrop.addEventListener("click", () => setMobileNavigationOpen(false));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setMobileNavigationOpen(false);
+  });
   startNotificationBadgeListener();
   navigate(defaultViewForRole(role));
+}
+
+function setMobileNavigationOpen(open) {
+  const sidebar = document.getElementById("sidebar");
+  const backdrop = document.getElementById("mobile-nav-backdrop");
+  const button = document.getElementById("mobile-menu");
+  if (!sidebar || !backdrop || !button) return;
+
+  sidebar.classList.toggle("open", open);
+  backdrop.classList.toggle("open", open);
+  button.setAttribute("aria-expanded", String(open));
+  button.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
 }
 
 function startNotificationBadgeListener() {
@@ -528,7 +553,7 @@ async function navigate(view, options = {}) {
 
   state.currentView = view;
   state.currentStudentUid = options.studentUid || null;
-  document.getElementById("sidebar")?.classList.remove("open");
+  setMobileNavigationOpen(false);
   document.querySelectorAll("[data-nav]").forEach((button) => button.classList.toggle("active", button.dataset.nav === view));
   const titles = {
     map: "My AIM Map", documents: "Document Links", advisors: "My Advisors", advisees: "My Advisees",

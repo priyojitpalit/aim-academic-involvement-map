@@ -661,7 +661,7 @@ async function renderStudentPlan(studentUid, options = {}) {
       <div class="button-row"><button class="btn btn-secondary" id="print-plan-button" type="button">Print / Save as PDF</button>${options.backView ? '<button class="btn btn-secondary" id="back-from-plan">← Back</button>' : ""}</div>
     </div>
     ${useLocalDraft ? '<div class="status-banner testing"><strong>Recovered work:</strong> Your recent changes were restored and will save automatically.</div>' : ""}
-    <div class="map-intro-note">Plan ahead during each stage. At the end of the academic year or summer, return to record what you actually did and reflect on what you learned.</div>
+    <div class="map-intro-note">Use each stage to plan your academic goals, campus involvement, high-impact experiences, career preparation, and summers. Update your map as your plans develop.</div>
     ${aimGuideHtml()}
     <section class="panel plan-documents-summary">
       <div class="panel-head"><div><h3>Portfolio &amp; documents</h3></div>
@@ -730,7 +730,8 @@ function clearAutosaveTimer() {
 function collectStagesFromForm() {
   const stages = {};
   STAGES.forEach((stage) => {
-    const value = normalizeStageData(stage, {});
+    // Preserve previously stored fields that are no longer shown in the interface.
+    const value = normalizeStageData(stage, state.autosave?.originalStages?.[stage.key] || {});
     stageFieldDefinitions(stage).forEach(([key]) => {
       const input = document.querySelector(`[name="${stage.key}-${key}"]`);
       value[key] = input ? input.value.trim() : "";
@@ -831,15 +832,14 @@ function updateStageSummary(stageKey) {
   if (!stageKey) return;
   const details = document.querySelector(`details[data-stage="${stageKey}"]`);
   if (!details) return;
-  const planningInputs = Array.from(details.querySelectorAll(".stage-fields .field:not(.reflection-field) textarea"));
+  const planningInputs = Array.from(details.querySelectorAll(".stage-fields textarea"));
   const planningFilled = planningInputs.filter((item) => item.value.trim()).length;
-  const reflectionDone = Boolean(details.querySelector(".reflection-field textarea")?.value.trim());
   const badge = details.querySelector("[data-stage-progress]");
-  if (badge) badge.textContent = stageProgressText(planningFilled, planningInputs.length, reflectionDone);
+  if (badge) badge.textContent = stageProgressText(planningFilled, planningInputs.length);
 }
 
-function stageProgressText(planningFilled, planningTotal, reflectionDone) {
-  return `${planningFilled}/${planningTotal} planning areas started · ${reflectionDone ? "Reflection completed" : "Reflection pending"}`;
+function stageProgressText(planningFilled, planningTotal) {
+  return `${planningFilled}/${planningTotal} planning areas started`;
 }
 
 function printAimPlan() {
@@ -883,9 +883,7 @@ function timelineHtml(stages, stageUpdatedAt, comments, editable, canComment, st
   return `<div class="compact-timeline">${STAGES.map((stage, index) => {
     const value = normalizeStageData(stage, stages[stage.key] || {});
     const definitions = stageFieldDefinitions(stage);
-    const planningDefinitions = definitions.filter(([key]) => key !== "reflection");
-    const planningFilled = planningDefinitions.filter(([key]) => String(value[key] || "").trim()).length;
-    const reflectionDone = Boolean(String(value.reflection || "").trim());
+    const planningFilled = definitions.filter(([key]) => String(value[key] || "").trim()).length;
     const sectionComments = comments.filter((comment) => comment.sectionKey === stage.key);
     const indentedClass = stage.type === "summer" || stage.type === "graduation" ? " stage-accordion--transition" : "";
     const isMostRecent = latestStartedIndex >= 0 && index === latestStartedIndex;
@@ -902,7 +900,7 @@ function timelineHtml(stages, stageUpdatedAt, comments, editable, canComment, st
             <span class="stage-title-line"><span class="stage-summary-title">${escapeHtml(stage.title)}</span>${isMostRecent ? '<span class="stage-latest-badge">Most recent</span>' : ""}</span>
             <small class="stage-last-updated" data-stage-updated="${stage.key}">${updatedAt ? `Last updated ${escapeHtml(formatShortDate(updatedAt))}` : ""}</small>
           </span>
-          <span class="stage-progress" data-stage-progress>${stageProgressText(planningFilled, planningDefinitions.length, reflectionDone)}</span>
+          <span class="stage-progress" data-stage-progress>${stageProgressText(planningFilled, definitions.length)}</span>
           <span class="stage-chevron" aria-hidden="true">⌄</span>
         </summary>
         <div class="stage-body">
@@ -930,32 +928,20 @@ function stageFieldDefinitions(stage) {
       ["summerPlan", "Main Summer Plan", "What do you plan to do this summer?"],
       ["careerExperience", "Career-Related Experience", "Employment, internship, job shadowing, volunteering, or professional development…"],
       ["academicProgress", "Academic Progress", "Summer school, degree progress, skill-building, or PTH 205 preparation…"],
-      ["serviceTravel", "Service and/or Travel", "Service, community work, travel, or another meaningful summer experience…"],
-      ["reflection", "Summer Reflection", "What did you do this summer? What did you learn? What would you continue or change going forward?", "Complete at the end of the summer."]
+      ["serviceTravel", "Service and/or Travel", "Service, community work, travel, or another meaningful summer experience…"]
     ];
   }
   if (stage.type === "graduation") {
     return [
       ["destination", "Primary Destination", "Job, graduate school, service program, or another post-graduation goal…"],
-      ["preparation", "Preparation and Next Actions", "Applications, references, interviews, portfolio, entrance exams, financial planning…"],
-      ["reflection", "Where You’re Headed", "Where are you headed next, and what are your immediate next steps?", "Complete once your next step is clear."]
-    ];
-  }
-  if (stage.key === "senior") {
-    return [
-      ["academic", "Academic Goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
-      ["involvement", "Campus Involvement & Leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
-      ["highImpact", "High-Impact Experiences", "Study abroad, internship, service immersion, or undergraduate research…"],
-      ["career", "Career Preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
-      ["reflection", "Preparation for Next Steps", "What have you done to prepare for your next step, and what still needs to happen?", "Complete near the end of senior year."]
+      ["preparation", "Preparation and Next Actions", "Applications, references, interviews, portfolio, entrance exams, financial planning…"]
     ];
   }
   return [
     ["academic", "Academic Goals", "GPA, courses, tutoring, mentoring, major decisions, research, capstone…"],
     ["involvement", "Campus Involvement & Leadership", "Clubs, campus roles, leadership, service, and community involvement…"],
     ["highImpact", "High-Impact Experiences", "Study abroad, internship, service immersion, or undergraduate research…"],
-    ["career", "Career Preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"],
-    ["reflection", "End-of-Year Reflection", "What did you do? What did you learn? What would you continue or change going forward?", "Complete at the end of the academic year."]
+    ["career", "Career Preparation", "Résumé, networking, portfolio, Career Services, graduate-school or job preparation…"]
   ];
 }
 
@@ -983,7 +969,6 @@ function fieldToneClass(key) {
   if (key === "highImpact") return "tone-impact";
   if (["career", "careerExperience", "destination", "preparation"].includes(key)) return "tone-career";
   if (key === "summerPlan") return "tone-summer";
-  if (key === "reflection") return "tone-reflection reflection-field";
   return "";
 }
 
